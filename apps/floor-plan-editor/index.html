@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Floor Plan Editor</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="title">
+        <span class="logo">▦</span>
+        <h1>Floor Plan Editor</h1>
+      </div>
+      <div class="toolbar">
+        <button id="btn-add" title="Add a new room">+ Add room</button>
+        <button id="btn-duplicate" title="Duplicate selected room">⎘ Duplicate</button>
+        <button id="btn-delete" class="danger" title="Delete selected room (Del)">🗑 Delete</button>
+        <span class="sep"></span>
+        <button id="btn-zoom-out" title="Zoom out">−</button>
+        <span id="zoom-label">100%</span>
+        <button id="btn-zoom-in" title="Zoom in">+</button>
+        <button id="btn-fit" title="Fit to view (F)">⤢ Fit</button>
+        <span class="sep"></span>
+        <label class="toggle">
+          <input type="checkbox" id="toggle-grid" checked />
+          Grid
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="toggle-dims" checked />
+          Dimensions
+        </label>
+        <span class="sep"></span>
+        <button id="btn-export" title="Download floor plan as JSON">⬇ Export</button>
+        <button id="btn-import" title="Load floor plan from JSON">⬆ Import</button>
+        <input type="file" id="file-import" accept="application/json" hidden />
+        <button id="btn-reset" class="ghost" title="Reset to original plan">↺ Reset</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="canvas-wrap">
+        <svg id="canvas" xmlns="http://www.w3.org/2000/svg"></svg>
+        <div class="hint">
+          <strong>Drag</strong> a room to move ·
+          <strong>Drag corners</strong> to resize ·
+          <strong>Double-click</strong> to rename ·
+          <strong>Wheel</strong> to zoom ·
+          <strong>Space + drag</strong> to pan
+        </div>
+      </section>
+
+      <aside class="sidebar">
+        <h2>Properties</h2>
+        <div id="props" class="props">
+          <p class="empty">Select a room to edit its properties.</p>
+        </div>
+
+        <h2>Rooms</h2>
+        <ul id="room-list" class="room-list"></ul>
+
+        <h2>Stats</h2>
+        <div id="stats" class="stats"></div>
+      </aside>
+    </main>
+
+    <script src="floorplan.js"></script>
+    <script src="editor.js"></script>
+  </body>
+</html>
