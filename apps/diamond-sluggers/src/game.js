@@ -58,8 +58,8 @@ export class Game {
     this.pitch = null;
 
     // Build figures.
-    this.batter = world.makePlayer("home");
-    this.pitcher = world.makePlayer("away");
+    this.batter = world.makePlayer("home", "batter");
+    this.pitcher = world.makePlayer("away", "pitcher");
     world.scene.add(this.batter);
     world.scene.add(this.pitcher);
 
@@ -85,7 +85,7 @@ export class Game {
     };
     const arr = [];
     for (const [pos, p] of Object.entries(spots)) {
-      const mesh = this.world.makePlayer("away");
+      const mesh = this.world.makePlayer("away", "fielder");
       mesh.position.copy(p);
       mesh.userData.home = p.clone();
       mesh.userData.pos = pos;
@@ -627,7 +627,7 @@ export class Game {
   // Create, register, and return a new runner parked at home.
   _makeRunner() {
     const team = this.battingTeam;
-    const mesh = this.world.makePlayer(team);
+    const mesh = this.world.makePlayer(team, "runner");
     mesh.position.copy(BASES.home);
     this.world.scene.add(mesh);
     const r = { mesh, base: 0, target: 0, t: 0, scored: false };
@@ -832,14 +832,11 @@ export class Game {
   }
 
   _retint(group, team) {
+    // makePlayer registers the team-colored materials (jersey + cap) on
+    // userData.tint, so swapping sides is a direct color set.
     const color = team === "home" ? 0xff5722 : 0x4fc3f7;
-    group.traverse((o) => {
-      if (o.isMesh && o.material && o.material.color) {
-        // only retint jersey-ish parts (skip white pants / skin / cap)
-        const hex = o.material.color.getHex();
-        if (hex === 0xff5722 || hex === 0x4fc3f7) o.material.color.setHex(color);
-      }
-    });
+    const mats = (group.userData && group.userData.tint) || [];
+    for (const m of mats) m.color.setHex(color);
   }
 
   _checkGameOver() {
@@ -898,11 +895,14 @@ export class Game {
   // ---- animation helpers ---------------------------------------------------
   _swingAnim(kind) {
     const arm = this.batter.userData.rArm;
-    arm.rotation.z = kind === "power" ? -2.2 : -1.6;
+    arm.rotation.z = kind === "power" ? -2.4 : -1.8;
     this.batter.rotation.y = -0.9;
+    const rest = this.batter.userData.restRArm;
+    const restY = this.batter.userData.restRotY ?? 0.2;
     setTimeout(() => {
-      arm.rotation.z = 0;
-      this.batter.rotation.y = 0.2;
+      if (rest) arm.rotation.set(rest.x, rest.y, rest.z);
+      else arm.rotation.set(0, 0, 0);
+      this.batter.rotation.y = restY;
     }, 260);
   }
   _swingAnimFielder(f) {

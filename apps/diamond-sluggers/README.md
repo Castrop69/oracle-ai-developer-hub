@@ -20,7 +20,10 @@ The goal was **modern 3D graphics on PC, controllable with a PS5 pad, runnable
 immediately**. A WebGL/Three.js build delivers exactly that:
 
 - Real-time 3D stadium with dynamic lighting, soft shadows, and **UnrealBloom**
-  post-processing for the modern glow.
+  post-processing.
+- **PS2-era models and textures:** articulated players with short-sleeve
+  jerseys and uniform numbers, caps with brims, bats and gloves; textured
+  grass/dirt, outfield advertising walls, and a center-field scoreboard.
 - The browser **Gamepad API** reads a DualSense over USB or Bluetooth natively —
   no drivers, no Steam Input shim.
 - Zero install for the player: open a URL and hit **PLAY BALL**.

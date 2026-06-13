@@ -1,5 +1,7 @@
-// world.js — builds and renders the 3D scene: stadium, field, sky, lighting,
-// player figures, the ball, and an UnrealBloom post pass for the modern glow.
+// world.js — builds and renders the 3D scene: stadium, textured field, sky,
+// lighting, articulated player figures, the ball, and an UnrealBloom post pass.
+// Visual target: early-PS2-era baseball (jointed, textured low-poly models,
+// uniform numbers, caps/bats/gloves, ad walls, a center-field scoreboard).
 
 import * as THREE from "three";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
@@ -27,7 +29,7 @@ export class World {
     this.renderer.toneMappingExposure = 1.05;
 
     this.scene = new THREE.Scene();
-    this.scene.fog = new THREE.Fog(0x0b1626, 130, 320);
+    this.scene.fog = new THREE.Fog(0x0b1626, 150, 360);
 
     this.camera = new THREE.PerspectiveCamera(
       52,
@@ -37,6 +39,7 @@ export class World {
     );
     this._setCam("bat");
 
+    this._buildAssets(); // shared materials + procedural textures
     this._buildLights();
     this._buildSky();
     this._buildField();
@@ -48,7 +51,7 @@ export class World {
     this.composer.addPass(new RenderPass(this.scene, this.camera));
     this.bloom = new UnrealBloomPass(
       new THREE.Vector2(innerWidth, innerHeight),
-      0.55, // strength
+      0.5, // strength
       0.7, // radius
       0.85, // threshold
     );
@@ -56,6 +59,168 @@ export class World {
 
     this.resize();
     window.addEventListener("resize", () => this.resize());
+  }
+
+  // =========================================================================
+  // Procedural textures & shared materials (no external asset files).
+  // =========================================================================
+  _buildAssets() {
+    this._skinMat = new THREE.MeshStandardMaterial({
+      color: 0xe6b08a,
+      roughness: 0.7,
+    });
+    this._pantsMat = new THREE.MeshStandardMaterial({
+      color: 0xf3f3f3,
+      roughness: 0.8,
+      map: this._pinstripeTex(),
+    });
+    this._shoeMat = new THREE.MeshStandardMaterial({
+      color: 0x14181f,
+      roughness: 0.5,
+    });
+    this._beltMat = new THREE.MeshStandardMaterial({ color: 0x111317 });
+    this._jerseyTex = this._jerseyTex || this._makeJerseyTex();
+  }
+
+  _canvas(size = 128) {
+    const c = document.createElement("canvas");
+    c.width = c.height = size;
+    return c;
+  }
+
+  _pinstripeTex() {
+    const c = this._canvas(64);
+    const x = c.getContext("2d");
+    x.fillStyle = "#f3f3f3";
+    x.fillRect(0, 0, 64, 64);
+    x.strokeStyle = "rgba(40,40,60,0.25)";
+    x.lineWidth = 1;
+    for (let i = 4; i < 64; i += 8) {
+      x.beginPath();
+      x.moveTo(i, 0);
+      x.lineTo(i, 64);
+      x.stroke();
+    }
+    return new THREE.CanvasTexture(c);
+  }
+
+  // White-based jersey detail (pinstripes + a uniform number). The team color
+  // comes from the material's `color`, which multiplies this map — so retinting
+  // a player just changes material.color and the number/stripes stay readable.
+  _makeJerseyTex() {
+    const c = this._canvas(128);
+    const x = c.getContext("2d");
+    x.fillStyle = "#ffffff";
+    x.fillRect(0, 0, 128, 128);
+    x.strokeStyle = "rgba(255,255,255,0.0)";
+    // subtle pinstripes
+    x.strokeStyle = "rgba(0,0,0,0.12)";
+    x.lineWidth = 2;
+    for (let i = 10; i < 128; i += 14) {
+      x.beginPath();
+      x.moveTo(i, 0);
+      x.lineTo(i, 128);
+      x.stroke();
+    }
+    // a big uniform number on the chest
+    const num = 1 + ((Math.random() * 60) | 0);
+    x.font = "bold 60px Arial Black, Arial";
+    x.textAlign = "center";
+    x.textBaseline = "middle";
+    x.lineWidth = 6;
+    x.strokeStyle = "rgba(255,255,255,0.9)";
+    x.strokeText(String(num), 64, 72);
+    x.fillStyle = "rgba(15,15,25,0.75)";
+    x.fillText(String(num), 64, 72);
+    return new THREE.CanvasTexture(c);
+  }
+
+  _grassTexture() {
+    const c = this._canvas(256);
+    const x = c.getContext("2d");
+    for (let i = 0; i < 16; i++) {
+      x.fillStyle = i % 2 ? "#2f7d34" : "#287030";
+      x.fillRect(0, i * 16, 256, 16);
+    }
+    // speckle for a mowed-turf grain
+    for (let i = 0; i < 2200; i++) {
+      x.fillStyle = `rgba(${20 + Math.random() * 30},${90 + Math.random() * 50},${
+        30 + Math.random() * 30
+      },0.25)`;
+      x.fillRect(Math.random() * 256, Math.random() * 256, 2, 2);
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(10, 10);
+    return tex;
+  }
+
+  _dirtTexture() {
+    const c = this._canvas(256);
+    const x = c.getContext("2d");
+    x.fillStyle = "#a8703f";
+    x.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 5000; i++) {
+      const v = Math.random();
+      x.fillStyle = `rgba(${120 + v * 60},${70 + v * 40},${30 + v * 30},0.5)`;
+      x.fillRect(Math.random() * 256, Math.random() * 256, 2, 2);
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(4, 4);
+    return tex;
+  }
+
+  // Repeating outfield-wall advertising banners.
+  _adWallTexture() {
+    const c = document.createElement("canvas");
+    c.width = 1024;
+    c.height = 128;
+    const x = c.getContext("2d");
+    x.fillStyle = "#0d3b16";
+    x.fillRect(0, 0, 1024, 128);
+    const ads = [
+      ["#1b3a6b", "ORACLE", "#ffffff"],
+      ["#7a1020", "26ai", "#ffd54f"],
+      ["#143d2a", "SLUGGERS", "#ffffff"],
+      ["#3a2a05", "DIAMOND", "#ffd54f"],
+    ];
+    for (let i = 0; i < 8; i++) {
+      const [bg, txt, fg] = ads[i % ads.length];
+      x.fillStyle = bg;
+      x.fillRect(i * 128 + 6, 18, 116, 92);
+      x.fillStyle = fg;
+      x.font = "bold 34px Arial Black, Arial";
+      x.textAlign = "center";
+      x.textBaseline = "middle";
+      x.fillText(txt, i * 128 + 64, 66);
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.repeat.set(8, 1);
+    return tex;
+  }
+
+  _scoreboardTexture() {
+    const c = document.createElement("canvas");
+    c.width = 512;
+    c.height = 256;
+    const x = c.getContext("2d");
+    x.fillStyle = "#05080f";
+    x.fillRect(0, 0, 512, 256);
+    x.strokeStyle = "#1d2a40";
+    x.lineWidth = 6;
+    x.strokeRect(8, 8, 496, 240);
+    x.fillStyle = "#ffd54f";
+    x.font = "bold 54px Arial Black, Arial";
+    x.textAlign = "center";
+    x.fillText("DIAMOND", 256, 90);
+    x.fillStyle = "#ff5722";
+    x.fillText("SLUGGERS", 256, 150);
+    x.fillStyle = "#4fc3f7";
+    x.font = "bold 26px Arial";
+    x.fillText("● ● ● ● ● ● ● ● ●", 256, 210);
+    return new THREE.CanvasTexture(c);
   }
 
   // ---- camera presets ------------------------------------------------------
@@ -88,9 +253,9 @@ export class World {
   }
 
   _buildLights() {
-    this.scene.add(new THREE.HemisphereLight(0x9fc6ff, 0x2a4d2a, 0.65));
+    this.scene.add(new THREE.HemisphereLight(0x9fc6ff, 0x2a4d2a, 0.6));
 
-    const key = new THREE.DirectionalLight(0xfff2d6, 2.4);
+    const key = new THREE.DirectionalLight(0xfff2d6, 2.5);
     key.position.set(40, 80, 30);
     key.castShadow = true;
     key.shadow.mapSize.set(2048, 2048);
@@ -103,14 +268,12 @@ export class World {
     key.shadow.bias = -0.0004;
     this.scene.add(key);
 
-    // Stadium-tower fill from the other side.
     const fill = new THREE.DirectionalLight(0xbcd4ff, 0.7);
     fill.position.set(-50, 60, -40);
     this.scene.add(fill);
   }
 
   _buildSky() {
-    // Vertical gradient sky as a large inverted sphere.
     const geo = new THREE.SphereGeometry(500, 32, 16);
     const mat = new THREE.ShaderMaterial({
       side: THREE.BackSide,
@@ -125,23 +288,7 @@ export class World {
     this.scene.add(new THREE.Mesh(geo, mat));
   }
 
-  // Procedural mowed-grass texture so the outfield has stripes like a real park.
-  _grassTexture() {
-    const c = document.createElement("canvas");
-    c.width = c.height = 256;
-    const x = c.getContext("2d");
-    for (let i = 0; i < 16; i++) {
-      x.fillStyle = i % 2 ? "#2f7d34" : "#287030";
-      x.fillRect(0, i * 16, 256, 16);
-    }
-    const tex = new THREE.CanvasTexture(c);
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(8, 8);
-    return tex;
-  }
-
   _buildField() {
-    // Grass plane.
     const grass = new THREE.Mesh(
       new THREE.CircleGeometry(FENCE_RADIUS + 8, 64),
       new THREE.MeshStandardMaterial({
@@ -155,39 +302,46 @@ export class World {
     this.scene.add(grass);
 
     const dirtMat = new THREE.MeshStandardMaterial({
-      color: 0xb07a45,
+      map: this._dirtTexture(),
       roughness: 1,
     });
 
-    // Infield dirt: a diamond (rotated square) under the bases.
-    const diamond = new THREE.Mesh(
-      new THREE.CircleGeometry(28, 4),
-      dirtMat,
-    );
+    // Infield dirt diamond.
+    const diamond = new THREE.Mesh(new THREE.CircleGeometry(28, 4), dirtMat);
     diamond.rotation.x = -Math.PI / 2;
     diamond.rotation.z = Math.PI / 4;
     diamond.position.set(0, 0.01, -19.4);
     diamond.receiveShadow = true;
     this.scene.add(diamond);
 
-    // Grass cut-in inside the basepaths so only the paths/mound are dirt.
+    // Grass cut-in inside the basepaths.
     const infieldGrass = new THREE.Mesh(
       new THREE.CircleGeometry(15.5, 4),
-      new THREE.MeshStandardMaterial({ color: 0x2f7d34, roughness: 0.95 }),
+      new THREE.MeshStandardMaterial({
+        map: this._grassTexture(),
+        color: 0x6fae6f,
+        roughness: 0.95,
+      }),
     );
     infieldGrass.rotation.x = -Math.PI / 2;
     infieldGrass.rotation.z = Math.PI / 4;
     infieldGrass.position.set(0, 0.02, -19.4);
     this.scene.add(infieldGrass);
 
-    // Pitcher's mound.
+    // Pitcher's mound + rubber.
     const mound = new THREE.Mesh(
-      new THREE.CylinderGeometry(2.6, 2.6, 0.5, 24),
+      new THREE.CylinderGeometry(2.6, 2.8, 0.5, 24),
       dirtMat,
     );
     mound.position.copy(MOUND).setY(0.05);
     mound.receiveShadow = true;
     this.scene.add(mound);
+    const rubber = new THREE.Mesh(
+      new THREE.BoxGeometry(0.6, 0.06, 0.18),
+      new THREE.MeshStandardMaterial({ color: 0xffffff }),
+    );
+    rubber.position.copy(MOUND).setY(0.31);
+    this.scene.add(rubber);
 
     // Bases + home plate.
     const baseMat = new THREE.MeshStandardMaterial({
@@ -197,6 +351,7 @@ export class World {
     for (const key of ["first", "second", "third"]) {
       const b = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.2, 1.1), baseMat);
       b.position.copy(BASES[key]).setY(0.12);
+      b.rotation.y = Math.PI / 4;
       b.castShadow = true;
       this.scene.add(b);
     }
@@ -207,56 +362,70 @@ export class World {
     plate.position.set(0, 0.06, 0.4);
     this.scene.add(plate);
 
-    // Foul lines (chalk).
-    const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    // Batter's boxes (chalk dirt) and foul lines.
+    const chalk = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    for (const sx of [-1.5, 1.5]) {
+      const b = new THREE.Mesh(
+        new THREE.BoxGeometry(1.3, 0.02, 2.4),
+        new THREE.MeshStandardMaterial({
+          color: 0xc8a06a,
+          transparent: true,
+          opacity: 0.5,
+        }),
+      );
+      b.position.set(sx, 0.03, 0.4);
+      this.scene.add(b);
+    }
     for (const sign of [1, -1]) {
       const line = new THREE.Mesh(
         new THREE.BoxGeometry(0.25, 0.02, FENCE_RADIUS * 1.45),
-        lineMat,
+        chalk,
       );
-      line.position.set(0, 0.05, 0);
       line.rotation.y = sign * (Math.PI / 4);
-      // shift so the line emanates from home toward the corner
       line.position.x = sign * (FENCE_RADIUS * 0.51);
       line.position.z = -(FENCE_RADIUS * 0.51);
+      line.position.y = 0.05;
       this.scene.add(line);
     }
   }
 
   _buildStadium() {
-    // Outfield wall: a curved arc of fence around the field.
+    const thetaStart = -Math.PI * 0.75;
+    const thetaLen = Math.PI * 1.5;
+
+    // Outfield wall with advertising banners.
     const wall = new THREE.Mesh(
       new THREE.CylinderGeometry(
         FENCE_RADIUS,
         FENCE_RADIUS,
         FENCE_HEIGHT,
-        64,
+        96,
         1,
         true,
-        -Math.PI * 0.75,
-        Math.PI * 1.5,
+        thetaStart,
+        thetaLen,
       ),
       new THREE.MeshStandardMaterial({
-        color: 0x0d3b16,
+        map: this._adWallTexture(),
         side: THREE.DoubleSide,
-        roughness: 0.9,
+        roughness: 0.85,
       }),
     );
     wall.position.set(0, FENCE_HEIGHT / 2, 0);
     wall.castShadow = true;
     this.scene.add(wall);
 
-    // Yellow padding stripe on top of the wall.
+    // Yellow padding stripe atop the wall.
     const top = new THREE.Mesh(
       new THREE.CylinderGeometry(
         FENCE_RADIUS + 0.05,
         FENCE_RADIUS + 0.05,
         0.4,
-        64,
+        96,
         1,
         true,
-        -Math.PI * 0.75,
-        Math.PI * 1.5,
+        thetaStart,
+        thetaLen,
       ),
       new THREE.MeshStandardMaterial({
         color: 0xffd54f,
@@ -267,11 +436,28 @@ export class World {
     top.position.set(0, FENCE_HEIGHT, 0);
     this.scene.add(top);
 
-    // Tiered stands: concentric rings of "seats" (instanced boxes) + crowd specks.
-    const seatMat = new THREE.MeshStandardMaterial({
-      color: 0x243042,
-      roughness: 1,
-    });
+    // Center-field scoreboard on a frame.
+    const board = new THREE.Mesh(
+      new THREE.BoxGeometry(26, 13, 1),
+      new THREE.MeshStandardMaterial({
+        map: this._scoreboardTexture(),
+        emissive: 0x222233,
+        emissiveIntensity: 0.6,
+      }),
+    );
+    board.position.set(0, 17, -(FENCE_RADIUS + 10));
+    this.scene.add(board);
+    for (const sx of [-11, 11]) {
+      const leg = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.5, 0.5, 22),
+        new THREE.MeshStandardMaterial({ color: 0x10151d }),
+      );
+      leg.position.set(sx, 11, -(FENCE_RADIUS + 10.6));
+      this.scene.add(leg);
+    }
+
+    // Tiered stands.
+    const seatTex = this._seatTexture();
     for (let tier = 0; tier < 4; tier++) {
       const r = FENCE_RADIUS + 10 + tier * 9;
       const h = 6 + tier * 5;
@@ -280,13 +466,17 @@ export class World {
           r,
           r - 6,
           5,
-          64,
+          96,
           1,
           true,
           -Math.PI * 0.85,
           Math.PI * 1.7,
         ),
-        seatMat,
+        new THREE.MeshStandardMaterial({
+          map: seatTex,
+          roughness: 1,
+          side: THREE.DoubleSide,
+        }),
       );
       ring.position.set(0, h, 0);
       this.scene.add(ring);
@@ -317,9 +507,25 @@ export class World {
     }
   }
 
+  _seatTexture() {
+    const c = this._canvas(64);
+    const x = c.getContext("2d");
+    x.fillStyle = "#202a3c";
+    x.fillRect(0, 0, 64, 64);
+    for (let i = 0; i < 64; i += 8) {
+      x.fillStyle = "#161e2c";
+      x.fillRect(0, i, 64, 2);
+      x.fillStyle = "#28344a";
+      x.fillRect(i, 0, 2, 64);
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(40, 3);
+    return t;
+  }
+
   _buildCrowd() {
-    // Thousands of tiny colored points to read as a packed crowd.
-    const COUNT = 6000;
+    const COUNT = 7000;
     const geo = new THREE.BufferGeometry();
     const pos = new Float32Array(COUNT * 3);
     const col = new Float32Array(COUNT * 3);
@@ -340,23 +546,22 @@ export class World {
     geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
     this.crowd = new THREE.Points(
       geo,
-      new THREE.PointsMaterial({ size: 1.1, vertexColors: true }),
+      new THREE.PointsMaterial({ size: 1.2, vertexColors: true }),
     );
     this.scene.add(this.crowd);
   }
 
   _buildBall() {
     const ball = new THREE.Mesh(
-      new THREE.SphereGeometry(0.22, 16, 16),
+      new THREE.SphereGeometry(0.22, 20, 20),
       new THREE.MeshStandardMaterial({
-        color: 0xffffff,
+        map: this._ballTexture(),
         emissive: 0x111111,
         roughness: 0.4,
       }),
     );
     ball.castShadow = true;
 
-    // A glowing trail (line) we update as the ball flies.
     const trailGeo = new THREE.BufferGeometry();
     this._trailLen = 24;
     this._trailPos = new Float32Array(this._trailLen * 3);
@@ -378,57 +583,202 @@ export class World {
     return ball;
   }
 
-  // Build a stylized player figure (group) in a team's colors.
-  makePlayer(team) {
+  _ballTexture() {
+    const c = this._canvas(128);
+    const x = c.getContext("2d");
+    x.fillStyle = "#fdfdf5";
+    x.fillRect(0, 0, 128, 128);
+    x.strokeStyle = "#c0392b";
+    x.lineWidth = 2;
+    for (const off of [34, 94]) {
+      x.beginPath();
+      x.arc(off, 64, 40, -0.9, 0.9);
+      x.stroke();
+      // stitch ticks
+      for (let a = -0.8; a < 0.8; a += 0.16) {
+        const px = off + Math.cos(a) * 40;
+        const py = 64 + Math.sin(a) * 40;
+        x.beginPath();
+        x.moveTo(px, py - 3);
+        x.lineTo(px, py + 3);
+        x.stroke();
+      }
+    }
+    return new THREE.CanvasTexture(c);
+  }
+
+  // =========================================================================
+  // Player figure — articulated, textured, with cap/bat/glove by role.
+  // role: "batter" | "pitcher" | "fielder" | "runner"
+  // =========================================================================
+  makePlayer(team, role = "fielder") {
     const t = TEAMS[team];
     const g = new THREE.Group();
-    const skin = new THREE.MeshStandardMaterial({ color: 0xe0a878 });
-    const jersey = new THREE.MeshStandardMaterial({
+
+    const jerseyMat = new THREE.MeshStandardMaterial({
+      color: t.color,
+      map: this._jerseyTex,
+      roughness: 0.7,
+    });
+    const capMat = new THREE.MeshStandardMaterial({
       color: t.color,
       roughness: 0.6,
     });
-    const pants = new THREE.MeshStandardMaterial({ color: 0xf2f2f2 });
+    g.userData.tint = [jerseyMat, capMat]; // materials retinted on team change
 
-    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.42, 0.7, 4, 8), jersey);
-    torso.position.y = 1.5;
+    const skin = this._skinMat;
+    const pants = this._pantsMat;
+
+    // Torso + belt + pelvis.
+    const torso = new THREE.Mesh(
+      new THREE.CapsuleGeometry(0.32, 0.5, 6, 12),
+      jerseyMat,
+    );
+    torso.position.y = 1.3;
     torso.castShadow = true;
     g.add(torso);
-
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 16), skin);
-    head.position.y = 2.25;
-    head.castShadow = true;
-    g.add(head);
-
-    const cap = new THREE.Mesh(
-      new THREE.SphereGeometry(0.32, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2),
-      new THREE.MeshStandardMaterial({ color: t.accent }),
+    const belt = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.31, 0.31, 0.1, 12),
+      this._beltMat,
     );
-    cap.position.y = 2.34;
-    g.add(cap);
+    belt.position.y = 1.02;
+    g.add(belt);
+    const pelvis = new THREE.Mesh(
+      new THREE.CapsuleGeometry(0.28, 0.12, 4, 8),
+      pants,
+    );
+    pelvis.position.y = 0.92;
+    pelvis.castShadow = true;
+    g.add(pelvis);
 
-    const legGeo = new THREE.CapsuleGeometry(0.18, 0.7, 4, 8);
-    for (const sx of [-0.2, 0.2]) {
-      const leg = new THREE.Mesh(legGeo, pants);
-      leg.position.set(sx, 0.6, 0);
-      leg.castShadow = true;
-      g.add(leg);
+    // Legs.
+    for (const sx of [-0.16, 0.16]) {
+      const hip = new THREE.Group();
+      hip.position.set(sx, 0.9, 0);
+      g.add(hip);
+      const thigh = new THREE.Mesh(
+        new THREE.CapsuleGeometry(0.14, 0.36, 4, 8),
+        pants,
+      );
+      thigh.position.y = -0.26;
+      thigh.castShadow = true;
+      hip.add(thigh);
+      const shin = new THREE.Mesh(
+        new THREE.CapsuleGeometry(0.11, 0.36, 4, 8),
+        pants,
+      );
+      shin.position.y = -0.66;
+      hip.add(shin);
+      const shoe = new THREE.Mesh(
+        new THREE.BoxGeometry(0.18, 0.12, 0.36),
+        this._shoeMat,
+      );
+      shoe.position.set(0, -0.9, 0.07);
+      hip.add(shoe);
     }
 
-    // Arms — kept as a reference so we can swing/throw procedurally.
-    const armGeo = new THREE.CapsuleGeometry(0.13, 0.6, 4, 8);
-    const rArm = new THREE.Mesh(armGeo, jersey);
-    rArm.position.set(0.5, 1.6, 0);
-    g.add(rArm);
-    const lArm = new THREE.Mesh(armGeo, jersey);
-    lArm.position.set(-0.5, 1.6, 0);
-    g.add(lArm);
+    // Head + cap (dome + brim).
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.21, 16, 16), skin);
+    head.position.y = 1.78;
+    head.castShadow = true;
+    g.add(head);
+    const dome = new THREE.Mesh(
+      new THREE.SphereGeometry(0.225, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2),
+      capMat,
+    );
+    dome.position.y = 1.82;
+    g.add(dome);
+    const brim = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.04, 0.2), capMat);
+    brim.position.set(0, 1.81, 0.2);
+    g.add(brim);
+
+    // Arms — shoulder-pivot groups so a rotation swings the whole arm + prop.
+    const mkArm = (side) => {
+      const arm = new THREE.Group();
+      arm.position.set(side * 0.36, 1.55, 0);
+      const upper = new THREE.Mesh(
+        new THREE.CapsuleGeometry(0.11, 0.3, 4, 8),
+        jerseyMat,
+      );
+      upper.position.y = -0.17;
+      arm.add(upper);
+      const fore = new THREE.Mesh(
+        new THREE.CapsuleGeometry(0.09, 0.28, 4, 8),
+        skin,
+      );
+      fore.position.y = -0.48;
+      arm.add(fore);
+      const hand = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 10), skin);
+      hand.position.y = -0.68;
+      arm.add(hand);
+      g.add(arm);
+      return arm;
+    };
+    const rArm = mkArm(1);
+    const lArm = mkArm(-1);
     g.userData.rArm = rArm;
     g.userData.lArm = lArm;
+
+    // Role props + rest pose.
+    if (role === "batter") {
+      const bat = this._makeBat();
+      bat.position.set(0, -0.7, 0);
+      bat.rotation.set(-0.35, 0, 0.35);
+      rArm.add(bat);
+      // hands up together in a stance
+      rArm.rotation.set(-0.5, 0, -0.55);
+      lArm.rotation.set(-0.5, 0, 0.25);
+      g.rotation.y = 0.2;
+      g.userData.restRArm = { x: -0.5, y: 0, z: -0.55 };
+      g.userData.restRotY = 0.2;
+    } else if (role === "pitcher") {
+      const glove = this._makeGlove();
+      glove.position.set(0, -0.72, 0);
+      lArm.add(glove);
+    } else {
+      const glove = this._makeGlove();
+      glove.position.set(0, -0.72, 0);
+      lArm.add(glove);
+    }
 
     return g;
   }
 
-  // Smoothly chase the active camera preset each frame.
+  _makeBat() {
+    const bat = new THREE.Group();
+    const wood = new THREE.MeshStandardMaterial({
+      color: 0x8a5a2b,
+      roughness: 0.5,
+      metalness: 0.1,
+    });
+    const handle = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.035, 0.045, 0.55, 8),
+      wood,
+    );
+    handle.position.y = 0.27;
+    bat.add(handle);
+    const barrel = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.07, 0.045, 0.45, 8),
+      wood,
+    );
+    barrel.position.y = 0.72;
+    bat.add(barrel);
+    return bat;
+  }
+
+  _makeGlove() {
+    const glove = new THREE.Group();
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0x5a3b1c,
+      roughness: 0.8,
+    });
+    const palm = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 10), mat);
+    palm.scale.set(1, 1.2, 0.6);
+    glove.add(palm);
+    return glove;
+  }
+
+  // ---- runtime helpers -----------------------------------------------------
   updateCamera(dt) {
     const k = 1 - Math.pow(0.001, dt);
     this._camPos.lerp(this._camTarget.pos, k);
@@ -440,7 +790,6 @@ export class World {
   setBallTrail(visible) {
     this.ball.trail.visible = visible;
     if (!visible) {
-      // collapse the trail onto the ball so it doesn't streak on reappear
       for (let i = 0; i < this._trailLen; i++) {
         this._trailPos[i * 3] = this.ball.position.x;
         this._trailPos[i * 3 + 1] = this.ball.position.y;
@@ -452,7 +801,6 @@ export class World {
 
   pushTrail() {
     const p = this._trailPos;
-    // shift history back by one and write the head
     p.copyWithin(3, 0, p.length - 3);
     p[0] = this.ball.position.x;
     p[1] = this.ball.position.y;
