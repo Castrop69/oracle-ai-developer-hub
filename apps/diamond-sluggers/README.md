@@ -112,6 +112,29 @@ You manage the **home team** and play both sides of the ball.
 - Standard rules: 3 outs change sides, 9 innings, most runs wins. Walk-offs and
   extra innings included.
 
+## Bring your own 3D models (glTF/GLB)
+
+The game ships with procedural players and ballpark, but you can **drop in real
+art** without touching code. Put `.glb` files in `assets/models/` and point
+[`assets/manifest.json`](./assets/manifest.json) at them:
+
+```jsonc
+{
+  "players": { "home": "models/batter_home.glb", "away": "models/batter_away.glb" },
+  "stadium": "models/ballpark.glb",
+  "replaceProceduralStadium": true,
+  "playerScale": 1.0, "playerYOffset": 0.0, "playerYaw": 0.0,
+  "clips": { "idle": "idle", "swing": "swing", "pitch": "pitch", "run": "run", "dive": "dive" }
+}
+```
+
+Models are loaded with Three.js `GLTFLoader`; skinned characters are cloned per
+player and driven by an `AnimationMixer`, with clips matched by name (`idle`,
+`swing`, `pitch`, `run`, `dive`). **Anything missing falls back to the built-in
+figure**, so partial asset sets are fine. Full conventions (scale, orientation,
+clip names, where to find free rigged characters) are in
+[`assets/README.md`](./assets/README.md).
+
 ## Project layout
 
 ```
@@ -125,7 +148,9 @@ apps/diamond-sluggers/
     ├── input.js       # DualSense (Gamepad API) + keyboard, edge detection
     ├── audio.js       # procedural Web Audio SFX (no asset files)
     ├── ui.js          # HUD DOM bindings
+    ├── assets.js      # optional glTF/GLB loader (players + stadium), fallback
     └── game.js        # state machine: pitching, batting, fielding, scoring, AI
+└── assets/            # optional custom models + manifest.json (see its README)
 ```
 
 Everything is synthesized at runtime — no textures, models, or audio files to

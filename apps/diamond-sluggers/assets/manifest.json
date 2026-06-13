@@ -1,0 +1,18 @@
+{
+  "players": {
+    "home": null,
+    "away": null
+  },
+  "stadium": null,
+  "replaceProceduralStadium": false,
+  "playerScale": 1.0,
+  "playerYOffset": 0.0,
+  "playerYaw": 0.0,
+  "clips": {
+    "idle": "idle",
+    "swing": "swing",
+    "pitch": "pitch",
+    "run": "run",
+    "dive": "dive"
+  }
+}

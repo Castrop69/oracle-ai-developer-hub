@@ -16,7 +16,10 @@ import {
 } from "./constants.js";
 
 export class World {
-  constructor(canvas) {
+  constructor(canvas, assets = null) {
+    this.assets = assets;
+    this.mixers = []; // AnimationMixers for any loaded glTF characters
+
     this.renderer = new THREE.WebGLRenderer({
       canvas,
       antialias: true,
@@ -42,8 +45,15 @@ export class World {
     this._buildAssets(); // shared materials + procedural textures
     this._buildLights();
     this._buildSky();
-    this._buildField();
-    this._buildStadium();
+    // Use an imported stadium if the manifest asks to replace the procedural
+    // one; otherwise build the procedural field + ballpark.
+    if (!(this.assets && this.assets.replaceStadium)) {
+      this._buildField();
+      this._buildStadium();
+    }
+    if (this.assets && this.assets.stadium) {
+      this.scene.add(this.assets.stadium);
+    }
     this.ball = this._buildBall();
 
     // Post-processing: subtle bloom for lights, fire FX, and the ball trail.
@@ -608,12 +618,58 @@ export class World {
   }
 
   // =========================================================================
-  // Player figure — articulated, textured, with cap/bat/glove by role.
+  // Player figure. Uses an imported glTF model for the team if one was loaded,
+  // otherwise builds the procedural figure. Both expose the same interface
+  // (userData.isModel + the world.anim* methods drive the right animation).
   // role: "batter" | "pitcher" | "fielder" | "runner"
   // =========================================================================
   makePlayer(team, role = "fielder") {
+    if (this.assets && this.assets.hasPlayer(team)) {
+      return this._makeModelPlayer(team, role);
+    }
+    return this._makeProceduralPlayer(team, role);
+  }
+
+  _makeModelPlayer(team, role) {
+    const { root, animations } = this.assets.clonePlayer(team);
+    const m = this.assets.manifest;
+    const g = new THREE.Group();
+
+    root.scale.setScalar(m.playerScale || 1);
+    root.position.y += m.playerYOffset || 0;
+    root.rotation.y = m.playerYaw || 0;
+    root.traverse((o) => {
+      if (o.isMesh) {
+        o.castShadow = true;
+        o.receiveShadow = true;
+      }
+    });
+    g.add(root);
+    g.userData.isModel = true;
+
+    if (animations && animations.length) {
+      const mixer = new THREE.AnimationMixer(root);
+      this.mixers.push(mixer);
+      g.userData.mixer = mixer;
+      g.userData.actions = {};
+      const map = m.clips || {};
+      const findClip = (key) => {
+        const want = (map[key] || key).toLowerCase();
+        return animations.find((a) => a.name.toLowerCase().includes(want));
+      };
+      for (const key of ["idle", "swing", "pitch", "run", "dive"]) {
+        const clip = findClip(key);
+        if (clip) g.userData.actions[key] = mixer.clipAction(clip);
+      }
+      this._playLoop(g, role === "runner" ? "run" : "idle");
+    }
+    return g;
+  }
+
+  _makeProceduralPlayer(team, role = "fielder") {
     const t = TEAMS[team];
     const g = new THREE.Group();
+    g.userData.isModel = false;
 
     const jerseyMat = new THREE.MeshStandardMaterial({
       color: t.color,
@@ -719,7 +775,10 @@ export class World {
     g.userData.rArm = rArm;
     g.userData.lArm = lArm;
 
-    // Role props + rest pose.
+    // Role props + rest pose (arm rotations the anim* methods return to).
+    g.userData.restRArm = { x: 0, y: 0, z: 0 };
+    g.userData.restLArm = { x: 0, y: 0, z: 0 };
+    g.userData.restRotY = 0;
     if (role === "batter") {
       const bat = this._makeBat();
       bat.position.set(0, -0.7, 0);
@@ -730,18 +789,103 @@ export class World {
       lArm.rotation.set(-0.5, 0, 0.25);
       g.rotation.y = 0.2;
       g.userData.restRArm = { x: -0.5, y: 0, z: -0.55 };
+      g.userData.restLArm = { x: -0.5, y: 0, z: 0.25 };
       g.userData.restRotY = 0.2;
-    } else if (role === "pitcher") {
-      const glove = this._makeGlove();
-      glove.position.set(0, -0.72, 0);
-      lArm.add(glove);
     } else {
+      // pitcher / fielder / runner all carry a glove on the left hand
       const glove = this._makeGlove();
       glove.position.set(0, -0.72, 0);
       lArm.add(glove);
     }
 
     return g;
+  }
+
+  // =========================================================================
+  // Semantic animations — branch on procedural vs. glTF so game.js never has
+  // to know which representation a player uses.
+  // =========================================================================
+  animSwing(g, kind) {
+    if (g.userData.isModel) return this._playOnce(g, "swing", "idle");
+    const arm = g.userData.rArm;
+    if (!arm) return;
+    arm.rotation.z = kind === "power" ? -2.4 : -1.8;
+    g.rotation.y = -0.9;
+    clearTimeout(g.userData._tSwing);
+    g.userData._tSwing = setTimeout(() => {
+      const r = g.userData.restRArm;
+      arm.rotation.set(r.x, r.y, r.z);
+      g.rotation.y = g.userData.restRotY ?? 0.2;
+    }, 260);
+  }
+
+  animPitchCharge(g, amt) {
+    if (g.userData.isModel) return; // idle clip plays during the windup
+    const arm = g.userData.rArm;
+    if (arm) arm.rotation.x = -amt * 2;
+  }
+
+  animPitchRelease(g) {
+    if (g.userData.isModel) return this._playOnce(g, "pitch", "idle");
+    const arm = g.userData.rArm;
+    if (!arm) return;
+    arm.rotation.x = 1.2;
+    clearTimeout(g.userData._tPitch);
+    g.userData._tPitch = setTimeout(() => (arm.rotation.x = 0), 500);
+  }
+
+  animDive(g) {
+    if (g.userData.isModel) return this._playOnce(g, "dive", "idle");
+    const arm = g.userData.rArm;
+    if (!arm) return;
+    arm.rotation.x = -2.4;
+    clearTimeout(g.userData._tDive);
+    g.userData._tDive = setTimeout(() => (arm.rotation.x = 0), 300);
+  }
+
+  animResetArms(g) {
+    if (g.userData.isModel) return this._playLoop(g, "idle");
+    const r = g.userData.restRArm;
+    const l = g.userData.restLArm;
+    if (g.userData.rArm && r) g.userData.rArm.rotation.set(r.x, r.y, r.z);
+    if (g.userData.lArm && l) g.userData.lArm.rotation.set(l.x, l.y, l.z);
+  }
+
+  _playLoop(g, name) {
+    const a = g.userData.actions && g.userData.actions[name];
+    if (!a) return;
+    a.reset().setLoop(THREE.LoopRepeat, Infinity);
+    this._fadeTo(g, a);
+  }
+
+  _playOnce(g, name, thenLoop) {
+    const acts = g.userData.actions || {};
+    const a = acts[name];
+    if (!a) return;
+    a.reset();
+    a.setLoop(THREE.LoopOnce, 1);
+    a.clampWhenFinished = true;
+    this._fadeTo(g, a);
+    const mixer = g.userData.mixer;
+    if (thenLoop && acts[thenLoop] && mixer) {
+      const onFin = (e) => {
+        if (e.action !== a) return;
+        mixer.removeEventListener("finished", onFin);
+        this._playLoop(g, thenLoop);
+      };
+      mixer.addEventListener("finished", onFin);
+    }
+  }
+
+  _fadeTo(g, action) {
+    const prev = g.userData._cur;
+    if (prev && prev !== action) prev.fadeOut(0.15);
+    action.fadeIn(0.15).play();
+    g.userData._cur = action;
+  }
+
+  updateMixers(dt) {
+    for (const m of this.mixers) m.update(dt);
   }
 
   _makeBat() {

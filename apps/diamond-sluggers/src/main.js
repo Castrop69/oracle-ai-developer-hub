@@ -6,6 +6,7 @@ import { Input } from "./input.js";
 import { Audio } from "./audio.js";
 import { UI } from "./ui.js";
 import { Game } from "./game.js";
+import { AssetLoader } from "./assets.js";
 
 const canvas = document.getElementById("game");
 const ui = new UI();
@@ -16,9 +17,18 @@ let world, game, started = false;
 
 input.onConnect = (connected, id) => ui.padConnected(connected, id);
 
-function boot() {
+async function boot() {
+  // Load optional glTF assets first (manifest + models). Missing files are
+  // fine — the game falls back to procedural figures.
+  let assets = null;
   try {
-    world = new World(canvas);
+    assets = await new AssetLoader().load();
+  } catch (err) {
+    console.warn("[assets] loader error, continuing procedurally:", err);
+  }
+
+  try {
+    world = new World(canvas, assets);
   } catch (err) {
     document.getElementById("loading").textContent =
       "WebGL failed to start. Use a modern desktop browser (Chrome/Edge/Firefox). " +
@@ -60,6 +70,7 @@ function loop(now) {
 
   if (game) {
     if (started) game.update(dt);
+    world.updateMixers(dt); // advance any glTF character animations
     world.updateCamera(dt);
     // gentle idle crowd shimmer
     if (world.crowd) world.crowd.rotation.y += dt * 0.002;

@@ -203,7 +203,7 @@ export class Game {
         this._releasePitch(this._selectedPitch, 0.45 + this.charge * 0.55);
       }
       // Pitcher arm wind-up pose.
-      this.pitcher.userData.rArm.rotation.x = -this.charge * 2;
+      this.world.animPitchCharge(this.pitcher, this.charge);
     } else {
       // AI pitches to the human after a short windup.
       this.timer -= dt;
@@ -238,7 +238,7 @@ export class Game {
     this.world.ball.material.color.setHex(0xffffff);
     this.world.setBallTrail(true);
     this.world.setCamera(this.humanBatting ? "bat" : "pitch");
-    this.pitcher.userData.rArm.rotation.x = 1.2;
+    this.world.animPitchRelease(this.pitcher);
     this.state = "PITCH";
     this.swingMade = false;
   }
@@ -791,7 +791,7 @@ export class Game {
   _returnFielders() {
     for (const f of this.fielders) {
       f.position.copy(f.userData.home);
-      f.userData.rArm.rotation.set(0, 0, 0);
+      this.world.animResetArms(f);
     }
   }
 
@@ -894,20 +894,10 @@ export class Game {
 
   // ---- animation helpers ---------------------------------------------------
   _swingAnim(kind) {
-    const arm = this.batter.userData.rArm;
-    arm.rotation.z = kind === "power" ? -2.4 : -1.8;
-    this.batter.rotation.y = -0.9;
-    const rest = this.batter.userData.restRArm;
-    const restY = this.batter.userData.restRotY ?? 0.2;
-    setTimeout(() => {
-      if (rest) arm.rotation.set(rest.x, rest.y, rest.z);
-      else arm.rotation.set(0, 0, 0);
-      this.batter.rotation.y = restY;
-    }, 260);
+    this.world.animSwing(this.batter, kind);
   }
   _swingAnimFielder(f) {
-    f.userData.rArm.rotation.x = -2.4;
-    setTimeout(() => (f.userData.rArm.rotation.x = 0), 300);
+    this.world.animDive(f);
   }
 
   // ---- HUD / announcements -------------------------------------------------
