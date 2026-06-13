@@ -319,6 +319,89 @@ body {
 .pad.disconnected {
   background: rgba(255, 255, 255, 0.06);
 }
+#difficulty {
+  margin-bottom: 26px;
+}
+.diff-label {
+  font-size: 12px;
+  letter-spacing: 3px;
+  opacity: 0.7;
+  margin-bottom: 8px;
+}
+.diff-opts {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+.diff {
+  padding: 10px 22px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: #cdd6e2;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.1s;
+}
+.diff:hover {
+  border-color: rgba(255, 255, 255, 0.45);
+}
+.diff.active {
+  color: #1a0e00;
+  background: linear-gradient(180deg, var(--ice), #2196f3);
+  border-color: transparent;
+  box-shadow: 0 0 18px rgba(79, 195, 247, 0.5);
+}
+
+#pause {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(5, 7, 12, 0.82);
+  backdrop-filter: blur(6px);
+  z-index: 15;
+}
+.pause-card {
+  text-align: center;
+  padding: 40px 56px;
+  background: var(--panel);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 18px;
+}
+.pause-card h2 {
+  font-size: 44px;
+  font-weight: 900;
+  letter-spacing: 4px;
+  margin-bottom: 24px;
+}
+.pause-card button {
+  display: block;
+  width: 240px;
+  margin: 10px auto;
+  padding: 14px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.1s;
+}
+.pause-card button:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+#resumeBtn {
+  color: #1a0e00 !important;
+  background: linear-gradient(180deg, var(--fire2), var(--fire)) !important;
+  border-color: transparent !important;
+}
+
 #startBtn {
   display: block;
   margin: 0 auto 34px;

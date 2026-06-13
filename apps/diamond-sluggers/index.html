@@ -75,6 +75,15 @@
 
           <div id="padStatus" class="pad disconnected">🎮 No controller — using keyboard</div>
 
+          <div id="difficulty">
+            <div class="diff-label">DIFFICULTY</div>
+            <div class="diff-opts">
+              <button class="diff" data-diff="rookie">ROOKIE</button>
+              <button class="diff active" data-diff="pro">PRO</button>
+              <button class="diff" data-diff="legend">LEGEND</button>
+            </div>
+          </div>
+
           <button id="startBtn">PLAY BALL</button>
 
           <div class="controls">
@@ -102,6 +111,17 @@
             </div>
           </div>
           <p class="hint">Connect a PS5 controller over USB or Bluetooth, then press any button to wake it.</p>
+        </div>
+      </div>
+
+      <!-- Pause overlay -->
+      <div id="pause" class="hidden">
+        <div class="pause-card">
+          <h2>PAUSED</h2>
+          <button id="resumeBtn">RESUME</button>
+          <button id="restartBtn">RESTART GAME</button>
+          <button id="muteBtn">SOUND: ON</button>
+          <p class="hint">Options / Esc to resume · M to mute</p>
         </div>
       </div>
 

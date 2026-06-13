@@ -6,6 +6,8 @@ export class Audio {
     this.ctx = null;
     this.crowd = null;
     this.crowdGain = null;
+    this.master = null;
+    this.muted = false;
   }
 
   // Must be called from a user gesture (the PLAY BALL click) to satisfy
@@ -14,7 +16,22 @@ export class Audio {
     if (this.ctx) return;
     const AC = window.AudioContext || window.webkitAudioContext;
     this.ctx = new AC();
+    // Everything routes through a master gain so we can mute in one place.
+    this.master = this.ctx.createGain();
+    this.master.gain.value = this.muted ? 0 : 1;
+    this.master.connect(this.ctx.destination);
     this._startCrowd();
+  }
+
+  // Returns the new muted state.
+  toggleMute() {
+    this.muted = !this.muted;
+    if (this.master) this.master.gain.value = this.muted ? 0 : 1;
+    return this.muted;
+  }
+
+  _out() {
+    return this.master || this.ctx.destination;
   }
 
   _now() {
@@ -40,7 +57,7 @@ export class Audio {
     const gain = ctx.createGain();
     gain.gain.value = 0.04;
 
-    src.connect(filter).connect(gain).connect(ctx.destination);
+    src.connect(filter).connect(gain).connect(this._out());
     src.start();
     this.crowd = src;
     this.crowdGain = gain;
@@ -71,7 +88,7 @@ export class Audio {
       );
     gain.gain.setValueAtTime(vol, this._now());
     gain.gain.exponentialRampToValueAtTime(0.0001, this._now() + dur);
-    osc.connect(gain).connect(ctx.destination);
+    osc.connect(gain).connect(this._out());
     osc.start();
     osc.stop(this._now() + dur + 0.02);
   }
@@ -94,7 +111,7 @@ export class Audio {
     filter.frequency.value = 1200 + power * 1800;
     const gain = ctx.createGain();
     gain.gain.value = 0.5 + power * 0.4;
-    src.connect(filter).connect(gain).connect(ctx.destination);
+    src.connect(filter).connect(gain).connect(this._out());
     src.start();
     // a woody knock under the crack
     this._tone(180 + power * 120, 0.09, "triangle", 0.4, 90);

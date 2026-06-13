@@ -26,6 +26,8 @@ immediately**. A WebGL/Three.js build delivers exactly that:
   grass/dirt, outfield advertising walls, and a center-field scoreboard.
 - The browser **Gamepad API** reads a DualSense over USB or Bluetooth natively —
   no drivers, no Steam Input shim.
+- Three **difficulty levels**, in-game **pause / restart** (no refresh), and a
+  **mute** toggle.
 - Zero install for the player: open a URL and hit **PLAY BALL**.
 
 The same gameplay code would port to a native engine later, but this gets a
@@ -75,7 +77,15 @@ No controller? The game is fully playable on the **keyboard**.
 | Pitch: Screwball | **○** | **4** |
 | Charge pitch / Turbo | **R2** (hold) | **Space** (hold) |
 | Dive / Leap (field) | **✕** | **J** |
-| Start from menu | any button | **Enter** |
+| Pause / Resume (also restart after a final) | **Options** | **Esc** |
+| Mute / unmute | pause menu | **M** |
+| Start from menu | **✕ / ○** | **Enter** |
+
+Pick a **difficulty** — *Rookie · Pro · Legend* — on the title screen. It scales
+how hard the AI pitches and hits, how fast fielders cover ground, and how
+forgiving your swing-timing window is. **Pause** with Options/Esc to resume,
+restart, or toggle sound; when a game ends, Options/Esc starts a fresh one — no
+page refresh needed.
 
 The pad **rumbles** on contact, big hits, and home runs.
 

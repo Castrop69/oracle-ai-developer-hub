@@ -24,8 +24,18 @@ export class UI {
       announce: document.getElementById("announce"),
       prompt: document.getElementById("prompt"),
       padStatus: document.getElementById("padStatus"),
+      pause: document.getElementById("pause"),
+      muteBtn: document.getElementById("muteBtn"),
     };
     this._announceTimer = null;
+  }
+
+  showPause(show) {
+    this.el.pause.classList.toggle("hidden", !show);
+  }
+
+  setMuteLabel(muted) {
+    if (this.el.muteBtn) this.el.muteBtn.textContent = muted ? "SOUND: OFF" : "SOUND: ON";
   }
 
   showGame() {

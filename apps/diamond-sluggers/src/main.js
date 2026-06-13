@@ -14,8 +14,37 @@ const input = new Input();
 const audio = new Audio();
 
 let world, game, started = false;
+let selectedDifficulty = "pro";
 
 input.onConnect = (connected, id) => ui.padConnected(connected, id);
+
+// --- menu: difficulty selector ---
+document.querySelectorAll(".diff").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".diff").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    selectedDifficulty = btn.dataset.diff;
+    audio.uiSelect && audio.ctx && audio.uiSelect();
+  });
+});
+
+// --- pause overlay controls ---
+function togglePause(force) {
+  if (!started || !game || game.gameOver) return;
+  game.paused = force === undefined ? !game.paused : force;
+  ui.showPause(game.paused);
+}
+document.getElementById("resumeBtn").addEventListener("click", () => togglePause(false));
+document.getElementById("restartBtn").addEventListener("click", () => {
+  game.reset();
+  ui.showPause(false);
+});
+document.getElementById("muteBtn").addEventListener("click", () => {
+  ui.setMuteLabel(audio.toggleMute());
+});
+window.addEventListener("keydown", (e) => {
+  if (e.code === "KeyM") ui.setMuteLabel(audio.toggleMute());
+});
 
 async function boot() {
   // Load optional glTF assets first (manifest + models). Missing files are
@@ -46,6 +75,7 @@ document.getElementById("startBtn").addEventListener("click", () => {
   if (started) return;
   started = true;
   audio.init();
+  game.setDifficulty(selectedDifficulty);
   ui.showGame();
   game.start();
 });
@@ -60,7 +90,7 @@ function loop(now) {
 
   // Let the player start with any controller button from the menu, too.
   if (!started && input.hasPad) {
-    for (const b of ["cross", "options", "circle"]) {
+    for (const b of ["cross", "circle"]) {
       if (input.pressed(b)) {
         document.getElementById("startBtn").click();
         break;
@@ -68,9 +98,18 @@ function loop(now) {
     }
   }
 
+  // Options/Esc toggles pause during a game, or starts a new game once it's over.
+  if (started && game && input.pressed("options")) {
+    if (game.gameOver) game.reset();
+    else togglePause();
+  }
+
   if (game) {
-    if (started) game.update(dt);
-    world.updateMixers(dt); // advance any glTF character animations
+    const live = started && !game.paused;
+    if (live) {
+      game.update(dt);
+      world.updateMixers(dt); // advance any glTF character animations
+    }
     world.updateCamera(dt);
     // gentle idle crowd shimmer
     if (world.crowd) world.crowd.rotation.y += dt * 0.002;

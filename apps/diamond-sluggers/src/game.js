@@ -27,6 +27,44 @@ const PITCHES = {
   circle: { name: "SCREWBALL", speed: 0.82, break: -1.0, color: 0xba68c8 },
 };
 
+// Difficulty presets. They tune the AI on both sides plus how forgiving the
+// human's batting window and the fielders are.
+//   aiWild       — spread of AI pitch locations vs. you (higher = more balls)
+//   aiVelo       — AI pitch velocity floor when pitching to you
+//   aiSwingProb  — per-frame chance the AI hitter swings at a strike
+//   aiAimNoise   — AI hitter's contact error (higher = weaker contact)
+//   fielderSpeed — how fast fielders converge on the ball
+//   batWindow    — multiplier on the human's swing-timing window
+export const DIFFICULTY = {
+  rookie: {
+    label: "ROOKIE",
+    aiWild: 1.7,
+    aiVelo: 0.4,
+    aiSwingProb: 0.1,
+    aiAimNoise: 0.75,
+    fielderSpeed: 10.5,
+    batWindow: 1.35,
+  },
+  pro: {
+    label: "PRO",
+    aiWild: 1.1,
+    aiVelo: 0.6,
+    aiSwingProb: 0.18,
+    aiAimNoise: 0.5,
+    fielderSpeed: 13,
+    batWindow: 1.1,
+  },
+  legend: {
+    label: "LEGEND",
+    aiWild: 0.55,
+    aiVelo: 0.82,
+    aiSwingProb: 0.28,
+    aiAimNoise: 0.3,
+    fielderSpeed: 15,
+    batWindow: 0.92,
+  },
+};
+
 const tmp = new THREE.Vector3();
 
 export class Game {
@@ -38,6 +76,11 @@ export class Game {
 
     this.state = "IDLE";
     this.timer = 0;
+    this.paused = false;
+
+    // Difficulty (set from the menu before start()).
+    this.difficulty = "pro";
+    this.D = DIFFICULTY.pro;
 
     // Score & situation.
     this.score = { away: 0, home: 0 };
@@ -95,12 +138,42 @@ export class Game {
     return arr;
   }
 
+  setDifficulty(name) {
+    if (DIFFICULTY[name]) {
+      this.difficulty = name;
+      this.D = DIFFICULTY[name];
+    }
+  }
+
   start() {
     this._recolorForHalf(); // top of 1st: away bats, home fields
     this.state = "READY";
     this.timer = 0.8;
     this._announce(`${this.half === "top" ? "TOP" : "BOTTOM"} 1`, 1.2);
     this.updateHUD();
+  }
+
+  // Full reset to a fresh game without reloading the page. Reuses the existing
+  // batter/pitcher/fielder meshes; only the transient runners are despawned.
+  reset() {
+    for (const r of this.runners) this.world.scene.remove(r.mesh);
+    this.runners = [];
+    this.bases = [null, null, null];
+    this.score = { away: 0, home: 0 };
+    this.inning = 1;
+    this.half = "top";
+    this.outs = 0;
+    this.balls = 0;
+    this.strikes = 0;
+    this.gameOver = false;
+    this.paused = false;
+    this.turbo = 0;
+    this.onFire = false;
+    this.world.setBloom(0.5);
+    this._returnFielders();
+    this._resetForPitch();
+    this.ui.prompt("");
+    this.start();
   }
 
   // Position batter/pitcher and reset the pitch.
@@ -210,10 +283,10 @@ export class Game {
       if (this.timer <= 0) {
         const keys = ["cross", "square", "triangle", "circle"];
         const type = keys[(Math.random() * keys.length) | 0];
-        // AI aims mostly in-zone, sometimes nibbles the corners.
-        this.aimX = (Math.random() - 0.5) * ZONE.halfWidth * 2.2;
+        // Aim spread and velocity scale with difficulty.
+        this.aimX = (Math.random() - 0.5) * ZONE.halfWidth * 2 * this.D.aiWild;
         this.aimY = ZONE.bottom + Math.random() * (ZONE.top - ZONE.bottom);
-        this._releasePitch(type, 0.55 + Math.random() * 0.4);
+        this._releasePitch(type, this.D.aiVelo + Math.random() * 0.3);
       }
     }
   }
@@ -283,9 +356,10 @@ export class Game {
           Math.abs(p.plateX) < ZONE.halfWidth + 0.2 &&
           p.plateY > ZONE.bottom &&
           p.plateY < ZONE.top;
-        if (inZone && Math.random() < 0.18) {
-          this.aimX = p.plateX + (Math.random() - 0.5) * 0.5;
-          this.aimY = p.plateY + (Math.random() - 0.5) * 0.4;
+        if (inZone && Math.random() < this.D.aiSwingProb) {
+          const n = this.D.aiAimNoise;
+          this.aimX = p.plateX + (Math.random() - 0.5) * n;
+          this.aimY = p.plateY + (Math.random() - 0.5) * n * 0.8;
           this._attemptSwing(Math.random() < 0.5 ? "power" : "contact", false);
         }
       }
@@ -306,7 +380,10 @@ export class Game {
     // Timing: ideal contact when ball is just in front of the plate (z≈0.6).
     const idealZ = 0.6;
     const timingErr = Math.abs(ball.position.z - idealZ);
-    const timingWindow = kind === "power" ? 0.9 : 1.2;
+    // The human's window widens/narrows with difficulty; the AI hitter always
+    // uses the baseline so difficulty only affects the player's leniency.
+    const winScale = this.humanBatting ? this.D.batWindow : 1;
+    const timingWindow = (kind === "power" ? 0.9 : 1.2) * winScale;
     const timingQ = clamp(1 - timingErr / timingWindow, 0, 1);
 
     // Plate coverage: how close the bat aim is to the actual ball location.
@@ -429,7 +506,7 @@ export class Game {
     const toT = tmp.copy(target).sub(fielder.position);
     toT.y = 0;
     const fdist = toT.length();
-    const fspeed = 13;
+    const fspeed = this.D.fielderSpeed;
     if (fdist > 0.3) {
       fielder.position.addScaledVector(toT.normalize(), Math.min(fspeed * dt, fdist));
       fielder.lookAt(target.x, 0, target.z);
@@ -865,7 +942,7 @@ export class Game {
     this._announce(`FINAL\n${a} — ${h}\n${msg}`, 6, h >= a);
     this.audio.cheer(0.32, 4000);
     this.audio.fire();
-    this.ui.prompt("Refresh to play again");
+    this.ui.prompt("Options / Esc to play again");
     return true;
   }
 
