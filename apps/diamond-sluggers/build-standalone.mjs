@@ -42,12 +42,32 @@ html = html
   .replace(/<script type="importmap">[\s\S]*?<\/script>\s*/, "")
   .replace(/<script type="module" src="\.\/src\/main\.js"><\/script>\s*/, "");
 
-// CSS into <head>, JS just before </body> (DOM is parsed by then).
+// CSS into <head>.
 html = html.replace("</head>", `  <style>\n${css}\n  </style>\n  </head>`);
-html = html.replace(
-  "</body>",
-  `  <script>\n${bundleJs}\n  </script>\n  </body>`,
-);
+
+// Embed the bundle as base64 and decode+run it at load time. Base64 contains
+// only [A-Za-z0-9+/=] — no "<", no "</script>", no "<!--" — so the HTML parser
+// physically cannot mis-tokenize the code (the cause of a frozen page). The
+// decoded JS is executed via a script element whose textContent is NOT
+// HTML-parsed, so it's bulletproof regardless of what the bundle contains.
+const b64 = Buffer.from(bundleJs, "utf8").toString("base64");
+const bootstrap = `<script>
+(function () {
+  try {
+    var bin = atob("${b64}");
+    var bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    var code = new TextDecoder("utf-8").decode(bytes);
+    var s = document.createElement("script");
+    s.textContent = code;
+    document.body.appendChild(s);
+  } catch (e) {
+    var el = document.getElementById("loading");
+    if (el) { el.style.whiteSpace = "pre-wrap"; el.textContent = "\\u26A0 Bootstrap failed: " + (e && e.message || e); }
+  }
+})();
+</script>`;
+html = html.replace("</body>", `  ${bootstrap}\n  </body>`);
 
 await mkdir("dist", { recursive: true });
 await writeFile("dist/diamond-sluggers.html", html);

@@ -46,6 +46,15 @@ window.addEventListener("keydown", (e) => {
   if (e.code === "KeyM") ui.setMuteLabel(audio.toggleMute());
 });
 
+// Live startup stage, shown on the loading overlay. If anything stalls, the
+// last stage tells us (and the player) exactly where — no silent hang.
+let bootStage = "starting";
+function stage(name) {
+  bootStage = name;
+  const el = document.getElementById("loading");
+  if (el && !el.classList.contains("hidden")) el.textContent = "Loading… (" + name + ")";
+}
+
 // Show a fatal message on the loading overlay instead of hanging silently.
 function fatal(msg) {
   const el = document.getElementById("loading");
@@ -56,6 +65,16 @@ function fatal(msg) {
   el.style.textAlign = "center";
   el.textContent = "⚠ " + msg;
 }
+
+// Watchdog: if boot hasn't finished shortly, surface where it's stuck.
+setTimeout(() => {
+  if (bootStage !== "ready")
+    fatal(
+      "Startup stalled at: " +
+        bootStage +
+        "\n\nYour browser/GPU may be blocking WebGL.\nTry Chrome or Edge with hardware acceleration ON.",
+    );
+}, 7000);
 
 // Catch anything that escapes (incl. async) so the player never sees a frozen
 // "Loading stadium…" with no explanation.
@@ -70,6 +89,7 @@ window.addEventListener("unhandledrejection", (e) => {
 async function boot() {
   // Load optional glTF assets first (manifest + models). Missing files — or a
   // file:// page with no server — are fine: we fall back to procedural figures.
+  stage("loading assets");
   let assets = null;
   try {
     assets = await new AssetLoader().load();
@@ -79,7 +99,9 @@ async function boot() {
 
   // Build the renderer AND the game inside one guard so neither can hang boot.
   try {
+    stage("creating 3D renderer");
     world = new World(canvas, assets);
+    stage("building players");
     game = new Game(world, input, audio, ui);
   } catch (err) {
     fatal(
@@ -90,6 +112,7 @@ async function boot() {
     return;
   }
 
+  stage("ready");
   ui.hideLoading();
   world.render(); // pre-render a frame behind the menu
 }
