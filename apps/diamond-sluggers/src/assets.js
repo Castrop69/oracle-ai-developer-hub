@@ -80,6 +80,15 @@ export class AssetLoader {
   }
 
   async _loadManifest() {
+    // On a file:// page (e.g. the double-click standalone build) fetch is
+    // blocked/unreliable and there's nothing to serve — go straight to
+    // procedural visuals instead of risking a hang.
+    if (typeof location !== "undefined" && location.protocol === "file:") {
+      console.info(
+        "[assets] file:// page — skipping manifest fetch, procedural visuals only.",
+      );
+      return DEFAULT_MANIFEST;
+    }
     try {
       const res = await fetch(this.base + "manifest.json", { cache: "no-cache" });
       if (!res.ok) throw new Error("HTTP " + res.status);

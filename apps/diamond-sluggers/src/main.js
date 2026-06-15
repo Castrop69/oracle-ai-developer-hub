@@ -46,9 +46,30 @@ window.addEventListener("keydown", (e) => {
   if (e.code === "KeyM") ui.setMuteLabel(audio.toggleMute());
 });
 
+// Show a fatal message on the loading overlay instead of hanging silently.
+function fatal(msg) {
+  const el = document.getElementById("loading");
+  if (!el) return;
+  el.classList.remove("hidden");
+  el.style.whiteSpace = "pre-wrap";
+  el.style.padding = "24px";
+  el.style.textAlign = "center";
+  el.textContent = "⚠ " + msg;
+}
+
+// Catch anything that escapes (incl. async) so the player never sees a frozen
+// "Loading stadium…" with no explanation.
+window.addEventListener("error", (e) =>
+  fatal((e.error && (e.error.stack || e.error.message)) || e.message || "Unknown error"),
+);
+window.addEventListener("unhandledrejection", (e) => {
+  const r = e.reason;
+  fatal("Startup error:\n" + ((r && (r.stack || r.message)) || String(r)));
+});
+
 async function boot() {
-  // Load optional glTF assets first (manifest + models). Missing files are
-  // fine — the game falls back to procedural figures.
+  // Load optional glTF assets first (manifest + models). Missing files — or a
+  // file:// page with no server — are fine: we fall back to procedural figures.
   let assets = null;
   try {
     assets = await new AssetLoader().load();
@@ -56,19 +77,21 @@ async function boot() {
     console.warn("[assets] loader error, continuing procedurally:", err);
   }
 
+  // Build the renderer AND the game inside one guard so neither can hang boot.
   try {
     world = new World(canvas, assets);
+    game = new Game(world, input, audio, ui);
   } catch (err) {
-    document.getElementById("loading").textContent =
-      "WebGL failed to start. Use a modern desktop browser (Chrome/Edge/Firefox). " +
-      err;
+    fatal(
+      "Couldn't start the game:\n" +
+        (err && (err.message || err)) +
+        "\n\nTry Chrome or Edge with hardware acceleration enabled.",
+    );
     return;
   }
-  game = new Game(world, input, audio, ui);
-  ui.hideLoading();
 
-  // Pre-render a frame behind the menu so the stadium is visible.
-  world.render();
+  ui.hideLoading();
+  world.render(); // pre-render a frame behind the menu
 }
 
 document.getElementById("startBtn").addEventListener("click", () => {
