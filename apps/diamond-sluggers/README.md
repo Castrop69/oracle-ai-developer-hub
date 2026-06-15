@@ -35,22 +35,37 @@ real, playable, good-looking game into your hands today.
 
 ## Run it
 
-You need a tiny static web server (ES modules don't load over `file://`).
+### Easiest: one double-clickable file (no server, works offline)
+
+Bundle the whole game — including Three.js — into a single self-contained HTML
+file you can just double-click:
 
 ```bash
 cd apps/diamond-sluggers
-
-# Option A — npm (uses `serve`)
-npm start
-#   → open http://localhost:5173
-
-# Option B — Python, no install
-python3 -m http.server 5173
-#   → open http://localhost:5173
+npm install            # one-time: pulls three + esbuild
+npm run build:standalone
+#   → dist/diamond-sluggers.html   (open it by double-clicking)
 ```
 
-Three.js is pulled from a CDN via an import map, so the **first load needs
-internet**. After that the browser caches it.
+The output is fully self-contained (no CDN, no server, no internet). Share it,
+email it, drop it on a USB stick — double-click and play. Custom glTF models
+aren't loaded in this mode (browsers block local file reads over `file://`), so
+it uses the built-in graphics.
+
+### Dev mode: serve the source over http
+
+The unbundled source uses ES modules + an import map, which **don't load over
+`file://`**, so serve it with a tiny static server:
+
+```bash
+cd apps/diamond-sluggers
+npm start                     # uses `serve` → http://localhost:5173
+# or, no install:
+python3 -m http.server 5173   # → http://localhost:5173
+```
+
+In this mode Three.js loads from a CDN, so the **first load needs internet**
+(then it caches), and custom glTF models in `assets/` are loaded.
 
 > Tip: open in **Chrome or Edge** for the best DualSense + WebGL experience.
 

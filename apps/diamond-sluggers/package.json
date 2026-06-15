@@ -6,8 +6,20 @@
   "type": "module",
   "scripts": {
     "start": "npx --yes serve@14 -l 5173 .",
-    "dev": "npx --yes serve@14 -l 5173 ."
+    "dev": "npx --yes serve@14 -l 5173 .",
+    "build:standalone": "node build-standalone.mjs"
   },
-  "keywords": ["game", "baseball", "threejs", "webgl", "gamepad", "arcade"],
-  "license": "MIT"
+  "keywords": [
+    "game",
+    "baseball",
+    "threejs",
+    "webgl",
+    "gamepad",
+    "arcade"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "esbuild": "^0.20.2",
+    "three": "^0.160.0"
+  }
 }
