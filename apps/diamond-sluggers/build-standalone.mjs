@@ -7,13 +7,18 @@
 import { build } from "esbuild";
 import { readFile, writeFile, mkdir } from "fs/promises";
 import path from "path";
+import { fileURLToPath } from "url";
 
-const root = path.resolve(".");
+// Resolve everything against this script's own directory so the build works
+// no matter where it's invoked from.
+const root = path.dirname(fileURLToPath(import.meta.url));
+process.chdir(root);
 const jsm = path.join(root, "node_modules/three/examples/jsm");
 
 // 1. Bundle src/main.js and everything it imports into a single classic IIFE.
 const result = await build({
-  entryPoints: ["src/main.js"],
+  entryPoints: [path.join(root, "src/main.js")],
+  absWorkingDir: root,
   bundle: true,
   format: "iife",
   minify: true,
@@ -44,6 +49,35 @@ html = html
 
 // CSS into <head>.
 html = html.replace("</head>", `  <style>\n${css}\n  </style>\n  </head>`);
+
+// 2b. Embed the asset manifest and any referenced .glb models as base64 so the
+//     standalone file gets the real 3D characters even over file://.
+let assetScript = "";
+try {
+  const manifest = JSON.parse(await readFile("assets/manifest.json", "utf8"));
+  const embedded = {};
+  const refs = [
+    ...Object.values(manifest.players || {}),
+    manifest.stadium,
+  ].filter(Boolean);
+  for (const ref of refs) {
+    if (embedded[ref]) continue;
+    try {
+      embedded[ref] = (await readFile(path.join("assets", ref))).toString("base64");
+      console.log(`embedded asset: ${ref}`);
+    } catch (e) {
+      console.warn(`skipping missing asset: ${ref}`);
+    }
+  }
+  if (Object.keys(embedded).length || (manifest.players && (manifest.players.home || manifest.players.away))) {
+    assetScript = `<script>window.__EMBEDDED_MANIFEST=${JSON.stringify(
+      manifest,
+    )};window.__EMBEDDED_ASSETS=${JSON.stringify(embedded)};</script>\n  `;
+  }
+} catch (e) {
+  console.warn("no manifest embedded:", e.message);
+}
+html = html.replace("<body>", `<body>\n  ${assetScript}`);
 
 // Embed the bundle as base64 and decode+run it at load time. Base64 contains
 // only [A-Za-z0-9+/=] — no "<", no "</script>", no "<!--" — so the HTML parser

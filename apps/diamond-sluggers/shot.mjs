@@ -3,6 +3,9 @@
 import chromium from "@sparticuz/chromium";
 import { chromium as pw } from "playwright-core";
 import path from "path";
+import { fileURLToPath } from "url";
+
+process.chdir(path.dirname(fileURLToPath(import.meta.url)));
 
 const prefix = process.argv[2] || "shot";
 const doPlay = process.argv.includes("--play");
@@ -50,6 +53,20 @@ if (doPlay) {
   await page.waitForTimeout(2200);
   await page.screenshot({ path: `${prefix}-batcam.png` });
   console.log("saved", `${prefix}-batcam.png`);
+
+  // Wait for the AI pitch to be in flight, swing (KeyJ), capture mid-swing.
+  try {
+    await page.waitForFunction(() => window.__game && window.__game.state === "PITCH", {
+      timeout: 15000,
+    });
+    await page.waitForTimeout(650);
+    await page.keyboard.press("KeyJ");
+    await page.waitForTimeout(160);
+    await page.screenshot({ path: `${prefix}-swing.png` });
+    console.log("saved", `${prefix}-swing.png`);
+  } catch (e) {
+    console.log("swing capture skipped:", e.message);
+  }
 }
 await browser.close();
 console.log("done");

@@ -156,7 +156,10 @@ export class Game {
   // Full reset to a fresh game without reloading the page. Reuses the existing
   // batter/pitcher/fielder meshes; only the transient runners are despawned.
   reset() {
-    for (const r of this.runners) this.world.scene.remove(r.mesh);
+    for (const r of this.runners) {
+      this.world.scene.remove(r.mesh);
+      this.world.releasePlayer?.(r.mesh);
+    }
     this.runners = [];
     this.bases = [null, null, null];
     this.score = { away: 0, home: 0 };
@@ -724,6 +727,7 @@ export class Game {
       if (r.base === r.target) {
         if (r.scored && r.base >= 4) {
           this.world.scene.remove(r.mesh);
+          this.world.releasePlayer?.(r.mesh);
           this.runners.splice(n, 1);
         }
         continue;
@@ -882,7 +886,10 @@ export class Game {
     this.outs = 0;
     this.bases = [null, null, null];
     // Despawn any lingering runners.
-    for (const r of this.runners) this.world.scene.remove(r.mesh);
+    for (const r of this.runners) {
+      this.world.scene.remove(r.mesh);
+      this.world.releasePlayer?.(r.mesh);
+    }
     this.runners = [];
 
     if (this.half === "top") {

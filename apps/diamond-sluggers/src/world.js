@@ -707,17 +707,52 @@ export class World {
     const { root, animations } = this.assets.clonePlayer(team);
     const m = this.assets.manifest;
     const g = new THREE.Group();
-    root.scale.setScalar(m.playerScale || 1);
+    const scale = m.playerScale || 1;
+    root.scale.setScalar(scale);
     root.position.y += m.playerYOffset || 0;
     root.rotation.y = m.playerYaw || 0;
+
+    // Per-instance team tint: clone the named materials so recoloring this
+    // player (e.g. on a half-inning side swap) can't affect its siblings.
+    const tintNames = m.tintMaterials || [];
+    const tintMats = [];
+    const teamColor = TEAMS[team].color;
+    let handBone = null;
     root.traverse((o) => {
       if (o.isMesh) {
         o.castShadow = true;
         o.receiveShadow = true;
+        if (o.material && tintNames.includes(o.material.name)) {
+          o.material = o.material.clone();
+          o.material.color.setHex(teamColor);
+          tintMats.push(o.material);
+        }
       }
+      if (!handBone && /hand[._]?r/i.test(o.name)) handBone = o;
     });
+    g.userData.tint = tintMats; // game._retint recolors these on side swaps
+
+    // Give the batter a bat in the right hand when the rig exposes one.
+    // Rigs bake arbitrary scales into their bone chains, so measure the
+    // hand's world scale and counter it exactly — the bat ends up ~1m long.
+    if (role === "batter" && handBone) {
+      root.updateMatrixWorld(true);
+      const ws = new THREE.Vector3();
+      handBone.getWorldScale(ws);
+      const s = ws.length() / Math.sqrt(3) || 1;
+      const bat = this._makeBat();
+      bat.scale.setScalar(1 / s);
+      bat.rotation.set(Math.PI / 2, 0, 0);
+      handBone.add(bat);
+    }
+
     g.add(root);
     g.userData.isModel = true;
+    // Face the batter toward the plate; everyone else faces +Z (toward home).
+    if (role === "batter") {
+      g.rotation.y = 0.9;
+      g.userData.restRotY = 0.9;
+    }
     if (animations && animations.length) {
       const mixer = new THREE.AnimationMixer(root);
       this.mixers.push(mixer);
@@ -978,6 +1013,15 @@ export class World {
 
   updateMixers(dt) {
     for (const m of this.mixers) m.update(dt);
+  }
+
+  // Drop a despawned player's mixer so it stops being updated (runners come
+  // and go constantly over nine innings).
+  releasePlayer(g) {
+    const mixer = g && g.userData && g.userData.mixer;
+    if (!mixer) return;
+    const i = this.mixers.indexOf(mixer);
+    if (i !== -1) this.mixers.splice(i, 1);
   }
 
   // =========================================================================
