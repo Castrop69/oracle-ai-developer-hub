@@ -18,8 +18,10 @@
     "arcade"
   ],
   "license": "MIT",
-  "dependencies": {
+  "devDependencies": {
+    "@sparticuz/chromium": "^121.0.0",
     "esbuild": "^0.20.2",
+    "playwright-core": "^1.41.2",
     "three": "^0.160.0"
   }
 }

@@ -117,7 +117,7 @@ export class Game {
     // Defensive positions (the fielding team). Indexed for catch logic.
     const spots = {
       P: MOUND.clone(),
-      C: new THREE.Vector3(0, 0, 2.2),
+      C: new THREE.Vector3(0, 0, 3.6), // behind the batting camera, so it never blocks the shot
       "1B": new THREE.Vector3(16, 0, -16),
       "2B": new THREE.Vector3(7, 0, -26),
       SS: new THREE.Vector3(-7, 0, -26),
@@ -179,7 +179,7 @@ export class Game {
   // Position batter/pitcher and reset the pitch.
   _resetForPitch() {
     this.batter.position.set(-1.2, 0, 1.4);
-    this.batter.rotation.y = 0.2;
+    this.batter.rotation.y = this.batter.userData.restRotY ?? 0.2;
     this.pitcher.position.copy(MOUND).setY(0);
     this.pitch = null;
     this.swing = null;
@@ -228,6 +228,12 @@ export class Game {
     }
     this._updateRunners(dt);
     this._updateTurboUI();
+
+    // Strike-zone box + aim reticle: visible while a pitch is being set up or
+    // in flight (both batting and pitching use the same aim target).
+    const showAim =
+      this.state === "READY" || this.state === "WINDUP" || this.state === "PITCH";
+    if (this.world.setAimUI) this.world.setAimUI(this.aimX, this.aimY, showAim);
   }
 
   // ---- READY: brief pause, then go to windup ------------------------------

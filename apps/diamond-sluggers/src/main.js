@@ -103,6 +103,9 @@ async function boot() {
     world = new World(canvas, assets);
     stage("building players");
     game = new Game(world, input, audio, ui);
+    // Debug handles (used by the headless screenshot harness; harmless in play).
+    window.__game = game;
+    window.__world = world;
   } catch (err) {
     fatal(
       "Couldn't start the game:\n" +
