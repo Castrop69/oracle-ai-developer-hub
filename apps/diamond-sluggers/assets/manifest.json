@@ -1,0 +1,19 @@
+{
+  "players": {
+    "home": "models/RobotExpressive.glb",
+    "away": "models/RobotExpressive.glb"
+  },
+  "stadium": null,
+  "replaceProceduralStadium": false,
+  "playerScale": 0.5,
+  "playerYOffset": 0.0,
+  "playerYaw": 0.0,
+  "tintMaterials": ["Main"],
+  "clips": {
+    "idle": "Idle",
+    "swing": "Punch",
+    "pitch": "Wave",
+    "run": "Running",
+    "dive": "Jump"
+  }
+}

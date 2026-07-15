@@ -1,0 +1,27 @@
+{
+  "name": "diamond-sluggers",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Over-the-top 3D arcade baseball for PC with PS5 DualSense support, in the spirit of MLB Slugfest and The Bigs.",
+  "type": "module",
+  "scripts": {
+    "start": "npx --yes serve@14 -l 5173 .",
+    "dev": "npx --yes serve@14 -l 5173 .",
+    "build:standalone": "node build-standalone.mjs"
+  },
+  "keywords": [
+    "game",
+    "baseball",
+    "threejs",
+    "webgl",
+    "gamepad",
+    "arcade"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@sparticuz/chromium": "^121.0.0",
+    "esbuild": "^0.20.2",
+    "playwright-core": "^1.41.2",
+    "three": "^0.160.0"
+  }
+}

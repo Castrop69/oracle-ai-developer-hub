@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Diamond Sluggers — Arcade Baseball</title>
+    <link rel="stylesheet" href="./styles.css" />
+
+    <!--
+      Three.js is loaded from a CDN via an import map so the game runs with no
+      build step. Just open index.html through a local web server (see README).
+    -->
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game"></canvas>
+
+      <!-- Heads-up display -->
+      <div id="hud" class="hidden">
+        <div id="scoreboard">
+          <div class="team away">
+            <span class="abbr">AWY</span>
+            <span class="runs" id="awayRuns">0</span>
+          </div>
+          <div class="middle">
+            <div class="inning"><span id="inningHalf">▲</span> <span id="inningNum">1</span></div>
+            <div class="count">
+              <span class="bs">B <b id="balls">0</b></span>
+              <span class="bs">S <b id="strikes">0</b></span>
+              <span class="bs">O <b id="outs">0</b></span>
+            </div>
+            <div class="bases">
+              <span class="base second" id="base2"></span>
+              <span class="base third" id="base3"></span>
+              <span class="base first" id="base1"></span>
+            </div>
+          </div>
+          <div class="team home">
+            <span class="abbr">HOM</span>
+            <span class="runs" id="homeRuns">0</span>
+          </div>
+        </div>
+
+        <!-- Turbo / ON FIRE meter -->
+        <div id="turboWrap">
+          <div id="turboLabel">TURBO</div>
+          <div id="turboBar"><div id="turboFill"></div></div>
+        </div>
+
+        <!-- Pitch / power charge meter -->
+        <div id="chargeWrap" class="hidden">
+          <div id="chargeBar"><div id="chargeFill"></div></div>
+        </div>
+
+        <!-- Center announcement (HIT!, OUT!, HOME RUN!, etc.) -->
+        <div id="announce"></div>
+
+        <!-- Contextual control hint -->
+        <div id="prompt"></div>
+      </div>
+
+      <!-- Title / start screen -->
+      <div id="menu">
+        <div class="menu-card">
+          <h1>DIAMOND <span>SLUGGERS</span></h1>
+          <p class="tag">Over-the-top arcade baseball · 3D · PS5 DualSense ready</p>
+
+          <div id="padStatus" class="pad disconnected">🎮 No controller — using keyboard</div>
+
+          <div id="difficulty">
+            <div class="diff-label">DIFFICULTY</div>
+            <div class="diff-opts">
+              <button class="diff" data-diff="rookie">ROOKIE</button>
+              <button class="diff active" data-diff="pro">PRO</button>
+              <button class="diff" data-diff="legend">LEGEND</button>
+            </div>
+          </div>
+
+          <button id="startBtn">PLAY BALL</button>
+
+          <div class="controls">
+            <div class="col">
+              <h3>🎮 DualSense</h3>
+              <ul>
+                <li><b>Left Stick</b> — Aim / Move</li>
+                <li><b>✕ Cross</b> — Swing / Confirm</li>
+                <li><b>□ Square</b> — Power swing</li>
+                <li><b>△ / ○</b> — Pitch type</li>
+                <li><b>R2</b> — Charge pitch / Turbo</li>
+                <li><b>L1 / R1</b> — Throw to base</li>
+              </ul>
+            </div>
+            <div class="col">
+              <h3>⌨️ Keyboard</h3>
+              <ul>
+                <li><b>Arrows / WASD</b> — Aim / Move</li>
+                <li><b>J</b> — Swing / Confirm</li>
+                <li><b>K</b> — Power swing</li>
+                <li><b>1–4</b> — Pitch type</li>
+                <li><b>Space</b> — Charge / Turbo</li>
+                <li><b>Q / E</b> — Throw to base</li>
+              </ul>
+            </div>
+          </div>
+          <p class="hint">Connect a PS5 controller over USB or Bluetooth, then press any button to wake it.</p>
+        </div>
+      </div>
+
+      <!-- Pause overlay -->
+      <div id="pause" class="hidden">
+        <div class="pause-card">
+          <h2>PAUSED</h2>
+          <button id="resumeBtn">RESUME</button>
+          <button id="restartBtn">RESTART GAME</button>
+          <button id="muteBtn">SOUND: ON</button>
+          <p class="hint">Options / Esc to resume · M to mute</p>
+        </div>
+      </div>
+
+      <div id="loading">Loading stadium…</div>
+    </div>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
