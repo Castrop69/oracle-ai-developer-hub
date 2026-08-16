@@ -1,0 +1,43 @@
+name: Deploy Construct4D to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/construct4d/**'
+      - '.github/workflows/deploy-construct4d.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-construct4d
+  cancel-in-progress: true
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/construct4d/package-lock.json
+      - name: Build
+        working-directory: apps/construct4d
+        run: |
+          npm ci
+          npm run build
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/construct4d/dist
+      - id: deployment
+        uses: actions/deploy-pages@v4

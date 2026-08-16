@@ -1,18 +1,32 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import type { BuildingModel, Mapping, ProjectData } from '../types';
-import { CATEGORY_COLORS, CATEGORY_LABELS } from '../types';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import type { BuildingModel, ElementCategory, Mapping, ProjectData } from '../types';
+import { CATEGORY_LABELS } from '../types';
 import { elementStatusAt, elementVarianceAt } from '../sim/status';
 
 const ACTIVE_COLOR = 0xfab219; // in-progress "under construction" yellow
-const GHOST_COLOR = 0x3a3a38;
 const SELECT_EMISSIVE = 0x1c5cab;
 
 // Status palette (fixed, reserved): ahead/on plan, slightly behind, behind
 const VAR_GOOD = 0x0ca30c;
 const VAR_WARN = 0xfab219;
 const VAR_CRIT = 0xd03b3b;
+
+/** Completed-element PBR materials per trade. */
+const CATEGORY_MATERIALS: Record<
+  ElementCategory,
+  { color: number; roughness: number; metalness: number; opacity?: number }
+> = {
+  site: { color: 0x5c6653, roughness: 0.95, metalness: 0.0 },
+  foundation: { color: 0x807d75, roughness: 0.9, metalness: 0.02 },
+  structure: { color: 0xb9bec8, roughness: 0.38, metalness: 0.55 },
+  envelope: { color: 0x8fb8dd, roughness: 0.12, metalness: 0.85, opacity: 0.55 },
+  roof: { color: 0x57534c, roughness: 0.85, metalness: 0.05 },
+  interior: { color: 0xd8cca8, roughness: 0.8, metalness: 0.0 },
+  mep: { color: 0xd95926, roughness: 0.5, metalness: 0.25 },
+};
 
 interface ViewerProps {
   model: BuildingModel | null;
@@ -27,6 +41,8 @@ interface ViewerProps {
 
 interface ElementMesh {
   mesh: THREE.Mesh;
+  edges: THREE.LineSegments;
+  edgeMaterial: THREE.LineBasicMaterial;
   doneMaterial: THREE.MeshStandardMaterial;
   activeMaterial: THREE.MeshStandardMaterial;
   ghostMaterial: THREE.MeshStandardMaterial;
@@ -53,6 +69,7 @@ export function Viewer({
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const meshesRef = useRef<Map<string, ElementMesh>>(new Map());
+  const activeMaterialsRef = useRef<Set<THREE.MeshStandardMaterial>>(new Set());
   const groupRef = useRef<THREE.Group | null>(null);
   const raycasterRef = useRef(new THREE.Raycaster());
   const [hover, setHover] = useState<HoverInfo | null>(null);
@@ -67,38 +84,80 @@ export function Viewer({
     if (!mount) return;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0d0d0d);
-    scene.fog = new THREE.Fog(0x0d0d0d, 180, 420);
+    // Subtle vertical gradient sky, dusk-blue over near-black
+    const skyCanvas = document.createElement('canvas');
+    skyCanvas.width = 2;
+    skyCanvas.height = 512;
+    const skyCtx = skyCanvas.getContext('2d')!;
+    const grad = skyCtx.createLinearGradient(0, 0, 0, 512);
+    grad.addColorStop(0, '#12161f');
+    grad.addColorStop(0.55, '#0d0f14');
+    grad.addColorStop(1, '#0a0a0c');
+    skyCtx.fillStyle = grad;
+    skyCtx.fillRect(0, 0, 2, 512);
+    const skyTex = new THREE.CanvasTexture(skyCanvas);
+    skyTex.colorSpace = THREE.SRGBColorSpace;
+    scene.background = skyTex;
+    scene.fog = new THREE.Fog(0x0c0e12, 190, 460);
     sceneRef.current = scene;
 
-    const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 1000);
-    camera.position.set(58, 42, 66);
+    const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 1200);
+    camera.position.set(58, 40, 68);
     cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.15;
     mount.appendChild(renderer.domElement);
+
+    // Image-based lighting so metals and glass pick up believable reflections
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environmentIntensity = 0.55;
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.target.set(0, 8, 0);
     controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
     controls.maxPolarAngle = Math.PI / 2.05;
+    controls.minDistance = 12;
+    controls.maxDistance = 320;
 
-    scene.add(new THREE.HemisphereLight(0xbdd3e6, 0x2a2a26, 0.9));
-    const sun = new THREE.DirectionalLight(0xfff2dc, 1.6);
-    sun.position.set(60, 90, 30);
+    scene.add(new THREE.HemisphereLight(0x9db8d4, 0x24231f, 0.5));
+
+    const sun = new THREE.DirectionalLight(0xffe8c4, 2.4);
+    sun.position.set(70, 95, 40);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.left = -90;
+    sun.shadow.camera.right = 90;
+    sun.shadow.camera.top = 90;
+    sun.shadow.camera.bottom = -90;
+    sun.shadow.camera.far = 300;
+    sun.shadow.bias = -0.0004;
+    sun.shadow.normalBias = 0.02;
     scene.add(sun);
 
+    const rim = new THREE.DirectionalLight(0x6d8fc4, 0.5);
+    rim.position.set(-60, 40, -50);
+    scene.add(rim);
+
     const ground = new THREE.Mesh(
-      new THREE.CircleGeometry(260, 48),
-      new THREE.MeshStandardMaterial({ color: 0x161614, roughness: 1 }),
+      new THREE.CircleGeometry(300, 64),
+      new THREE.MeshStandardMaterial({ color: 0x131311, roughness: 1 }),
     );
     ground.rotation.x = -Math.PI / 2;
-    ground.position.y = -0.35;
+    ground.position.y = -0.36;
+    ground.receiveShadow = true;
     scene.add(ground);
 
-    const grid = new THREE.GridHelper(240, 48, 0x2c2c2a, 0x232321);
-    grid.position.y = -0.34;
+    const grid = new THREE.GridHelper(260, 52, 0x2a2a28, 0x1f1f1d);
+    (grid.material as THREE.Material).transparent = true;
+    (grid.material as THREE.Material).opacity = 0.5;
+    grid.position.y = -0.35;
     scene.add(grid);
 
     const resize = () => {
@@ -124,13 +183,11 @@ export function Viewer({
         -((clientY - rect.top) / rect.height) * 2 + 1,
       );
       raycasterRef.current.setFromCamera(ndc, cam);
-      const visible = group.children.filter((c) => c.visible);
-      const hits = raycasterRef.current.intersectObjects(visible, false);
-      const hit = hits.find((h) => {
-        const m = h.object as THREE.Mesh;
-        return !(m.material as THREE.MeshStandardMaterial).wireframe; // ignore ghosts
-      });
-      return hit ? ((hit.object as THREE.Mesh).userData.elementId as string) : null;
+      const candidates = group.children.filter(
+        (c) => c.visible && c instanceof THREE.Mesh && !c.userData.ghost,
+      );
+      const hits = raycasterRef.current.intersectObjects(candidates, false);
+      return hits.length ? ((hits[0].object as THREE.Mesh).userData.elementId as string) : null;
     };
 
     let downPos: { x: number; y: number } | null = null;
@@ -187,9 +244,13 @@ export function Viewer({
     renderer.domElement.addEventListener('pointerleave', onLeave);
 
     let raf = 0;
+    const clock = new THREE.Clock();
     const animate = () => {
       raf = requestAnimationFrame(animate);
       controls.update();
+      // Breathing glow on in-progress work
+      const pulse = 0.45 + 0.3 * Math.sin(clock.getElapsedTime() * 2.4);
+      for (const m of activeMaterialsRef.current) m.emissiveIntensity = pulse;
       renderer.render(scene, camera);
     };
     animate();
@@ -202,6 +263,7 @@ export function Viewer({
       renderer.domElement.removeEventListener('pointermove', onMove);
       renderer.domElement.removeEventListener('pointerleave', onLeave);
       controls.dispose();
+      pmrem.dispose();
       renderer.dispose();
       mount.removeChild(renderer.domElement);
       sceneRef.current = null;
@@ -216,13 +278,14 @@ export function Viewer({
     if (groupRef.current) {
       scene.remove(groupRef.current);
       groupRef.current.traverse((o) => {
-        if (o instanceof THREE.Mesh) {
+        if (o instanceof THREE.Mesh || o instanceof THREE.LineSegments) {
           o.geometry.dispose();
           (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => m.dispose());
         }
       });
     }
     meshesRef.current.clear();
+    activeMaterialsRef.current.clear();
     if (!model) return;
 
     const group = new THREE.Group();
@@ -231,32 +294,54 @@ export function Viewer({
       // Anchor the box at its bottom so vertical growth looks like construction.
       geo.translate(0, el.h / 2, 0);
 
+      const spec = CATEGORY_MATERIALS[el.category];
       const doneMaterial = new THREE.MeshStandardMaterial({
-        color: new THREE.Color(CATEGORY_COLORS[el.category]),
-        roughness: el.category === 'envelope' ? 0.25 : 0.85,
-        metalness: el.category === 'structure' ? 0.35 : 0.05,
-        transparent: el.category === 'envelope',
-        opacity: el.category === 'envelope' ? 0.75 : 1,
+        color: spec.color,
+        roughness: spec.roughness,
+        metalness: spec.metalness,
+        transparent: spec.opacity !== undefined,
+        opacity: spec.opacity ?? 1,
       });
       const activeMaterial = new THREE.MeshStandardMaterial({
         color: ACTIVE_COLOR,
-        emissive: 0x664400,
-        roughness: 0.6,
+        emissive: 0x8a5a00,
+        emissiveIntensity: 0.5,
+        roughness: 0.55,
+        metalness: 0.1,
         transparent: true,
-        opacity: 0.92,
+        opacity: 0.95,
       });
       const ghostMaterial = new THREE.MeshStandardMaterial({
-        color: GHOST_COLOR,
-        wireframe: true,
+        color: 0x30302d,
         transparent: true,
-        opacity: 0.22,
+        opacity: 0.05,
+        depthWrite: false,
       });
 
       const mesh = new THREE.Mesh(geo, ghostMaterial);
       mesh.position.set(el.x, el.y, el.z);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
       mesh.userData.elementId = el.id;
+
+      // Crisp box edges — doubles as the clean "ghost" outline for future work
+      const edgeMaterial = new THREE.LineBasicMaterial({
+        color: 0x52514e,
+        transparent: true,
+        opacity: 0.35,
+      });
+      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), edgeMaterial);
+      mesh.add(edges);
+
       group.add(mesh);
-      meshesRef.current.set(el.id, { mesh, doneMaterial, activeMaterial, ghostMaterial });
+      meshesRef.current.set(el.id, {
+        mesh,
+        edges,
+        edgeMaterial,
+        doneMaterial,
+        activeMaterial,
+        ghostMaterial,
+      });
     }
     scene.add(group);
     groupRef.current = group;
@@ -266,43 +351,60 @@ export function Viewer({
   useEffect(() => {
     if (!model || !project) return;
     const taskByUid = new Map(project.tasks.map((t) => [t.uid, t]));
+    activeMaterialsRef.current.clear();
+
     for (const el of model.elements) {
       const entry = meshesRef.current.get(el.id);
       if (!entry) continue;
       const status = elementStatusAt(el, taskByUid, mapping, currentDate, project.start, project.finish);
-      const { mesh } = entry;
+      const { mesh, edges, edgeMaterial } = entry;
       const selected = selectedElementIds.has(el.id);
 
       let material: THREE.MeshStandardMaterial;
       if (status.state === 'future') {
         mesh.visible = showGhost || selected;
+        mesh.userData.ghost = true;
+        mesh.castShadow = false;
         material = entry.ghostMaterial;
         mesh.scale.y = 1;
+        edges.visible = true;
+        edgeMaterial.color.setHex(selected ? SELECT_EMISSIVE : 0x4c4b47);
+        edgeMaterial.opacity = selected ? 0.9 : 0.28;
       } else if (status.state === 'active') {
         mesh.visible = true;
+        mesh.userData.ghost = false;
+        mesh.castShadow = true;
         material = entry.activeMaterial;
         mesh.scale.y = Math.max(0.04, status.progress);
+        edges.visible = false;
+        activeMaterialsRef.current.add(entry.activeMaterial);
       } else {
         mesh.visible = true;
+        mesh.userData.ghost = false;
+        mesh.castShadow = true;
         material = entry.doneMaterial;
         mesh.scale.y = 1;
+        edges.visible = true;
+        edgeMaterial.color.setHex(selected ? 0x86b6ef : 0x0b0b0b);
+        edgeMaterial.opacity = selected ? 0.9 : 0.18;
       }
 
       // Variance overlay: recolor started elements by recorded-%-complete vs plan
       if (varianceMode && status.state !== 'future') {
         const v = elementVarianceAt(el, taskByUid, mapping, currentDate);
         if (v !== null) {
-          material = status.state === 'done' ? entry.doneMaterial : entry.activeMaterial;
           material.color.setHex(v >= -0.05 ? VAR_GOOD : v >= -0.2 ? VAR_WARN : VAR_CRIT);
         }
-      } else {
-        entry.doneMaterial.color.set(CATEGORY_COLORS[el.category]);
-        entry.activeMaterial.color.setHex(ACTIVE_COLOR);
+      } else if (status.state === 'done') {
+        material.color.setHex(CATEGORY_MATERIALS[el.category].color);
+      } else if (status.state === 'active') {
+        material.color.setHex(ACTIVE_COLOR);
       }
 
       material.emissive.setHex(
-        selected ? SELECT_EMISSIVE : material === entry.activeMaterial ? 0x664400 : 0x000000,
+        selected ? SELECT_EMISSIVE : material === entry.activeMaterial ? 0x8a5a00 : 0x000000,
       );
+      if (material !== entry.activeMaterial) material.emissiveIntensity = selected ? 0.8 : 1;
       mesh.material = material;
     }
   }, [model, project, mapping, currentDate, showGhost, varianceMode, selectedElementIds]);

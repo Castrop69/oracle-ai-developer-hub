@@ -54,6 +54,27 @@ npm run dev
 Open the printed URL (Chrome or Edge recommended for live file watching). Click
 **Load sample project** to see the full 4D loop without any files.
 
+## Web and app
+
+Construct4D ships as an installable **PWA**:
+
+- **Web** — deploy `dist/` to any static host. A GitHub Actions workflow
+  (`.github/workflows/deploy-construct4d.yml`) publishes it to **GitHub Pages** on every
+  push to `main` that touches this app: enable it once under
+  *Repo Settings → Pages → Source: GitHub Actions*, and the app is live at
+  `https://<user>.github.io/<repo>/`. The build uses relative paths, so it also works from
+  any subfolder or other static host (Netlify, S3, OCI Object Storage…).
+- **Desktop app** — open the web URL in Chrome or Edge and click the **Install** icon in
+  the address bar. Construct4D runs in its own window with its own dock/taskbar icon, and
+  the service worker keeps the app shell cached for instant, offline-tolerant startup.
+- **iPad / iPhone / Android** — open the URL and use **Add to Home Screen** (Safari share
+  menu) or **Install app** (Chrome menu). Handy for walking the site with the model.
+
+Note: live MS Project file-watching needs the File System Access API (Chrome/Edge desktop);
+on other platforms use **Import XML**. The visual style — PBR materials, soft shadows,
+ACES tone mapping, environment reflections — runs on WebGL and works everywhere the
+browser does, including the installed app.
+
 ## The MS Project round-trip
 
 1. In Microsoft Project: `File → Save As → XML Format (*.xml)` — save next to your `.mpp`.
