@@ -1,4 +1,5 @@
 import type { BuildingElement, ElementStatus, Mapping, Task } from '../types';
+import { categorizeTask } from '../mapping/autoMap';
 
 /** Time-based progress of one task at simulation date t (planned dates). */
 export function taskProgressAt(task: Task, t: Date): number {
@@ -72,6 +73,21 @@ export function elementVarianceAt(
   }
   if (n === 0) return null;
   return actual / n - planned / n;
+}
+
+const CLOSURE_RE = /\b(backfill\w*|slab[- ]on[- ]grade|sog)\b/i;
+
+/**
+ * How "closed up" the excavation is at date t: 0 = pit fully open, 1 = backfilled.
+ * Driven by explicit backfill / slab-on-grade tasks when the schedule has them,
+ * otherwise by overall foundation completion.
+ */
+export function excavationClosureAt(tasks: Task[], t: Date): number {
+  const leaf = tasks.filter((x) => !x.summary && !x.milestone);
+  let pool = leaf.filter((x) => CLOSURE_RE.test(x.name));
+  if (pool.length === 0) pool = leaf.filter((x) => categorizeTask(x.name) === 'foundation');
+  if (pool.length === 0) return 0;
+  return pool.reduce((sum, task) => sum + taskProgressAt(task, t), 0) / pool.length;
 }
 
 function clamp01(v: number): number {

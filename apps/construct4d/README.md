@@ -45,8 +45,11 @@ plan set PDF and Claude interprets the sheets — grids, dimensions, levels — 
 - **Below-grade work.** Excavation is its own trade: the dig limits render as a translucent
   cut volume that grows *downward* as mass-ex/shoring tasks progress, drilled piers and
   caissons bore down beneath the footings, and elevator pits and underslab utility runs sit
-  under the slab. Toggle **See below grade** to x-ray the ground (and tilt the camera lower)
-  and watch the underground sequence — the phase that usually drives early float. Keywords
+  under the slab. The pit behaves like the real thing: open through the foundation work,
+  then it closes up as backfill / slab-on-grade tasks progress (an explicit backfill task
+  drives this when the schedule has one). Toggle **See below grade** to x-ray the ground
+  (and tilt the camera lower) and watch the underground sequence — the phase that usually
+  drives early float; in x-ray the dig limits remain as a faint as-built trace. Keywords
   cover mass excavation, shoring, sheet/soldier piles, dewatering, piers, caissons, piles,
   auger cast, and underslab rough-in; the drawing interpreter also returns below-grade
   elements (basements, pier schedules, pits) when the sheets show them.

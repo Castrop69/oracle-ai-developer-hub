@@ -4,7 +4,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type { BuildingModel, ElementCategory, Mapping, ProjectData } from '../types';
 import { CATEGORY_LABELS } from '../types';
-import { elementStatusAt, elementVarianceAt } from '../sim/status';
+import { elementStatusAt, elementVarianceAt, excavationClosureAt } from '../sim/status';
 
 const ACTIVE_COLOR = 0xfab219; // in-progress "under construction" yellow
 const SELECT_EMISSIVE = 0x1c5cab;
@@ -371,6 +371,7 @@ export function Viewer({
   useEffect(() => {
     if (!model || !project) return;
     const taskByUid = new Map(project.tasks.map((t) => [t.uid, t]));
+    const closure = excavationClosureAt(project.tasks, currentDate);
     activeMaterialsRef.current.clear();
 
     for (const el of model.elements) {
@@ -421,13 +422,26 @@ export function Viewer({
         material.color.setHex(ACTIVE_COLOR);
       }
 
+      // Backfill: a finished pit closes up in normal view, stays a faint trace in x-ray
+      if (el.category === 'excavation' && status.state === 'done') {
+        const baseOpacity = xray ? 0.22 : 0.45;
+        if (closure >= 0.999 && !xray) {
+          mesh.visible = false;
+        } else {
+          entry.doneMaterial.opacity = Math.max(xray ? 0.08 : 0, baseOpacity * (1 - closure));
+          if (!xray && entry.doneMaterial.opacity <= 0.01) mesh.visible = false;
+        }
+        edges.visible = mesh.visible;
+        edgeMaterial.opacity = Math.min(edgeMaterial.opacity, 0.2);
+      }
+
       material.emissive.setHex(
         selected ? SELECT_EMISSIVE : material === entry.activeMaterial ? 0x8a5a00 : 0x000000,
       );
       if (material !== entry.activeMaterial) material.emissiveIntensity = selected ? 0.8 : 1;
       mesh.material = material;
     }
-  }, [model, project, mapping, currentDate, showGhost, varianceMode, selectedElementIds]);
+  }, [model, project, mapping, currentDate, showGhost, varianceMode, xray, selectedElementIds]);
 
   // X-ray ground: fade the terrain and surface work so below-grade elements read
   useEffect(() => {
@@ -449,8 +463,6 @@ export function Viewer({
         entry.doneMaterial.opacity = xray ? 0.18 : 1;
         entry.doneMaterial.depthWrite = !xray;
         entry.activeMaterial.opacity = xray ? 0.25 : 0.95;
-      } else if (el.category === 'excavation') {
-        entry.doneMaterial.opacity = xray ? 0.22 : 0.45;
       }
     }
   }, [xray, model]);
