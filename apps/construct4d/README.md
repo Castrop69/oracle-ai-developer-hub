@@ -38,6 +38,12 @@ plan set PDF and Claude interprets the sheets — grids, dimensions, levels — 
   tower crane stands (and slowly slews) while structure/envelope/roof work is running, then
   comes down; landscaping trees grow in with the site tasks; low-rise context buildings
   fade into the fog for depth and scale.
+- **Edit the schedule in-app.** Drag Gantt bars to move tasks (grab the middle) or stretch
+  them (grab an edge) — the 3D build sequence updates live as you drag. Linked successors
+  ripple with the change (toggleable), summary bars roll up automatically, and edited tasks
+  are outlined. A selected task also gets date pickers and a %-complete slider. **Export
+  XML** writes your changes back into the original MSPDI file so you can open it straight
+  in Microsoft Project — the full round trip: Project → Construct4D → adjust → Project.
 - **Two-way link tracing.** Click any element in 3D to see which schedule tasks drive it
   (hover for a quick tooltip); click a task name in the Gantt to highlight everything it
   builds in the model. `Esc` clears the selection.

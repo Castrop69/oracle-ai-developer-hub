@@ -564,3 +564,69 @@ body,
 .tt-row {
   margin: 1px 0;
 }
+
+/* ---------- schedule editing ---------- */
+.edits-pill {
+  background: rgba(57, 135, 229, 0.12);
+  border-color: rgba(57, 135, 229, 0.55);
+  color: #86b6ef;
+}
+
+.task-editor {
+  border-top: 1px solid var(--hairline);
+  margin-top: 8px;
+  padding-top: 4px;
+}
+
+.task-editor input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(3px);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+  padding: 20px 22px;
+  width: min(720px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 84vh;
+}
+
+.modal h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.modal textarea {
+  flex: 1;
+  min-height: 260px;
+  background: var(--page);
+  color: var(--ink-2);
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  padding: 10px;
+  font: 12px/1.5 ui-monospace, 'SF Mono', Menlo, monospace;
+  resize: vertical;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}

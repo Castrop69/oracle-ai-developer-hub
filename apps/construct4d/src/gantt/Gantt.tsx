@@ -2,6 +2,17 @@ import { useMemo, useRef, useState } from 'react';
 import type { ProjectData, Task } from '../types';
 import { taskProgressAt } from '../sim/status';
 
+type DragMode = 'move' | 'resize-start' | 'resize-end';
+
+interface DragState {
+  uid: number;
+  mode: DragMode;
+  originX: number;
+  origStart: number;
+  origFinish: number;
+  moved: boolean;
+}
+
 const ROW_H = 22;
 const BAR_H = 10;
 const LABEL_W = 250;
@@ -28,10 +39,21 @@ interface GanttProps {
   onScrub: (d: Date) => void;
   selectedTaskUids: Set<number>;
   onSelectTask: (uid: number | null) => void;
+  editedUids: Set<number>;
+  onEditTask: (uid: number, patch: { start: Date; finish: Date }) => void;
 }
 
-export function Gantt({ project, currentDate, onScrub, selectedTaskUids, onSelectTask }: GanttProps) {
+export function Gantt({
+  project,
+  currentDate,
+  onScrub,
+  selectedTaskUids,
+  onSelectTask,
+  editedUids,
+  onEditTask,
+}: GanttProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<DragState | null>(null);
   const [hover, setHover] = useState<{ task: Task; x: number; y: number } | null>(null);
 
   const t0 = startOfDay(project.start).getTime() - 2 * DAY_MS;
@@ -62,6 +84,47 @@ export function Gantt({ project, currentDate, onScrub, selectedTaskUids, onSelec
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [t0, t1, pxPerDay]);
 
+  const DAY_MS_L = 86400000;
+
+  const beginDrag = (e: React.PointerEvent, task: Task, mode: DragMode) => {
+    e.stopPropagation();
+    (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    dragRef.current = {
+      uid: task.uid,
+      mode,
+      originX: e.clientX,
+      origStart: task.start.getTime(),
+      origFinish: task.finish.getTime(),
+      moved: false,
+    };
+    setHover(null);
+  };
+
+  const dragMove = (e: React.PointerEvent) => {
+    const d = dragRef.current;
+    if (!d) return;
+    e.stopPropagation();
+    const dayDelta = Math.round((e.clientX - d.originX) / pxPerDay) * DAY_MS_L;
+    if (dayDelta !== 0) d.moved = true;
+    let start = d.origStart;
+    let finish = d.origFinish;
+    if (d.mode === 'move') {
+      start += dayDelta;
+      finish += dayDelta;
+    } else if (d.mode === 'resize-end') {
+      finish = Math.max(start, finish + dayDelta);
+    } else {
+      start = Math.min(finish, start + dayDelta);
+    }
+    onEditTask(d.uid, { start: new Date(start), finish: new Date(finish) });
+  };
+
+  const endDrag = (e: React.PointerEvent) => {
+    if (!dragRef.current) return;
+    e.stopPropagation();
+    dragRef.current = null;
+  };
+
   const scrubFromEvent = (e: React.PointerEvent<SVGSVGElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -78,6 +141,7 @@ export function Gantt({ project, currentDate, onScrub, selectedTaskUids, onSelec
         <span className="lg-item"><span className="lg-swatch" style={{ background: C.bar }} /> Built to date</span>
         <span className="lg-item"><span className="lg-swatch lg-diamond" style={{ background: C.milestone }} /> Milestone</span>
         <span className="lg-item"><span className="lg-swatch" style={{ background: C.cursor, width: 3 }} /> Simulation date — drag to scrub</span>
+        <span className="lg-item">Drag bars to reschedule · drag edges to stretch — the 3D updates live</span>
       </div>
       <div className="gantt-scroll" ref={scrollRef}>
         <div className="gantt-inner" style={{ width: LABEL_W + chartW }}>
@@ -152,6 +216,10 @@ export function Gantt({ project, currentDate, onScrub, selectedTaskUids, onSelec
                     key={t.uid}
                     d={`M ${cx} ${cy - 6} L ${cx + 6} ${cy} L ${cx} ${cy + 6} L ${cx - 6} ${cy} Z`}
                     fill={C.milestone}
+                    style={{ cursor: 'grab' }}
+                    onPointerDown={(e) => beginDrag(e, t, 'move')}
+                    onPointerMove={dragMove}
+                    onPointerUp={endDrag}
                     {...handlers}
                   />
                 );
@@ -171,14 +239,26 @@ export function Gantt({ project, currentDate, onScrub, selectedTaskUids, onSelec
                   />
                 );
               }
+              const edited = editedUids.has(t.uid);
+              const by = y + (ROW_H - BAR_H) / 2;
               return (
-                <g key={t.uid} {...handlers}>
-                  <rect x={x} y={y + (ROW_H - BAR_H) / 2} width={w} height={BAR_H} rx={4}
-                    fill={C.barTrack} stroke={C.bar} strokeWidth={0.75} />
+                <g key={t.uid} {...handlers} onPointerMove={dragMove} onPointerUp={endDrag}>
+                  <rect x={x} y={by} width={w} height={BAR_H} rx={4}
+                    fill={C.barTrack} stroke={edited ? '#86b6ef' : C.bar}
+                    strokeWidth={edited ? 1.5 : 0.75}
+                    style={{ cursor: 'grab' }}
+                    onPointerDown={(e) => beginDrag(e, t, 'move')} />
                   {progress > 0 && (
-                    <rect x={x} y={y + (ROW_H - BAR_H) / 2} width={Math.max(2, w * progress)}
-                      height={BAR_H} rx={4} fill={C.bar} />
+                    <rect x={x} y={by} width={Math.max(2, w * progress)}
+                      height={BAR_H} rx={4} fill={C.bar} style={{ pointerEvents: 'none' }} />
                   )}
+                  {/* resize handles */}
+                  <rect x={x - 3} y={by - 2} width={7} height={BAR_H + 4} fill="transparent"
+                    style={{ cursor: 'ew-resize' }}
+                    onPointerDown={(e) => beginDrag(e, t, 'resize-start')} />
+                  <rect x={x + w - 4} y={by - 2} width={7} height={BAR_H + 4} fill="transparent"
+                    style={{ cursor: 'ew-resize' }}
+                    onPointerDown={(e) => beginDrag(e, t, 'resize-end')} />
                 </g>
               );
             })}

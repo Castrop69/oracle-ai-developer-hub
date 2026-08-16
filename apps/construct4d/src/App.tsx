@@ -6,7 +6,8 @@ import { DrawingsPanel } from './drawings/DrawingsPanel';
 import { useProjectFile } from './msp/useProjectFile';
 import { generateModelFromSchedule } from './model/generateModelFromSchedule';
 import { autoMap, categorizeTask } from './mapping/autoMap';
-import type { BuildingModel, Mapping, ProjectData } from './types';
+import { applyEdits, rippleSuccessors, exportMspXml } from './schedule/edits';
+import type { BuildingModel, Mapping, ProjectData, ScheduleEdits } from './types';
 import { CATEGORY_COLORS, CATEGORY_LABELS } from './types';
 import sampleScheduleXml from '../public/samples/sample-schedule.xml?raw';
 
@@ -31,8 +32,12 @@ export default function App() {
     }
   });
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [edits, setEdits] = useState<ScheduleEdits>({});
+  const [ripple, setRipple] = useState(true);
+  const [exportOpen, setExportOpen] = useState(false);
 
   const onProjectLoaded = useCallback((p: ProjectData) => {
+    setEdits({}); // a fresh import/re-sync is the new source of truth
     setCurrentDate((prev) => {
       // Keep the scrub position on re-sync; jump to start on first load.
       if (prev >= p.start && prev <= p.finish) return prev;
@@ -41,7 +46,39 @@ export default function App() {
   }, []);
 
   const projectFile = useProjectFile(onProjectLoaded);
-  const { project } = projectFile;
+  const baseProject = projectFile.project;
+  // Everything downstream sees the edited schedule; the 3D re-derives from it live.
+  const project = useMemo(
+    () => (baseProject ? applyEdits(baseProject, edits) : null),
+    [baseProject, edits],
+  );
+  const editedUids = useMemo(() => new Set(Object.keys(edits).map(Number)), [edits]);
+
+  const editTask = useCallback(
+    (uid: number, patch: { start?: Date; finish?: Date; percentComplete?: number }) => {
+      if (!baseProject) return;
+      setEdits((prev) => {
+        const current = project?.tasks.find((t) => t.uid === uid);
+        if (!current) return prev;
+        let next: ScheduleEdits = {
+          ...prev,
+          [uid]: {
+            ...prev[uid],
+            ...(patch.start !== undefined && { start: patch.start }),
+            ...(patch.finish !== undefined && { finish: patch.finish }),
+            ...(patch.percentComplete !== undefined && { percentComplete: patch.percentComplete }),
+          },
+        };
+        // Push/pull linked successors when the finish moves
+        if (ripple && patch.finish !== undefined) {
+          const delta = patch.finish.getTime() - current.finish.getTime();
+          next = rippleSuccessors(project!.tasks, uid, delta, next);
+        }
+        return next;
+      });
+    },
+    [baseProject, project, ripple],
+  );
 
   const model: BuildingModel | null = useMemo(() => {
     if (drawingModel) return drawingModel;
@@ -207,6 +244,13 @@ export default function App() {
               <button className="btn" onClick={loadSample}>Load sample project</button>
             </>
           )}
+          {editedUids.size > 0 && (
+            <span className="watch-pill edits-pill">
+              {editedUids.size} task{editedUids.size !== 1 ? 's' : ''} rescheduled
+              <button className="btn tiny" onClick={() => setExportOpen(true)}>Export XML</button>
+              <button className="btn tiny" onClick={() => setEdits({})}>revert</button>
+            </span>
+          )}
           <button className="btn" onClick={() => setSidebarOpen((s) => !s)}>
             {sidebarOpen ? 'Hide panel' : 'Show panel'}
           </button>
@@ -300,6 +344,48 @@ export default function App() {
                         <li>No linked schedule tasks — element follows overall project progress</li>
                       )}
                     </ul>
+                    {selection?.type === 'task' && (() => {
+                      const task = taskByUid.get(selection.uid);
+                      if (!task || task.summary) return null;
+                      const iso = (d: Date) =>
+                        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                      return (
+                        <div className="task-editor">
+                          <label className="field">
+                            <span>Start</span>
+                            <input
+                              type="date"
+                              value={iso(task.start)}
+                              onChange={(e) => {
+                                const d = e.target.valueAsDate;
+                                if (d) editTask(task.uid, { start: new Date(Math.min(d.getTime(), task.finish.getTime())) });
+                              }}
+                            />
+                          </label>
+                          <label className="field">
+                            <span>Finish</span>
+                            <input
+                              type="date"
+                              value={iso(task.finish)}
+                              onChange={(e) => {
+                                const d = e.target.valueAsDate;
+                                if (d) editTask(task.uid, { finish: new Date(Math.max(d.getTime(), task.start.getTime())) });
+                              }}
+                            />
+                          </label>
+                          <label className="field">
+                            <span>Recorded % complete: {task.percentComplete}%</span>
+                            <input
+                              type="range"
+                              min={0}
+                              max={100}
+                              value={task.percentComplete}
+                              onChange={(e) => editTask(task.uid, { percentComplete: Number(e.target.value) })}
+                            />
+                          </label>
+                        </div>
+                      );
+                    })()}
                     <button className="btn tiny" onClick={() => setSelection(null)}>Clear selection</button>
                   </div>
                 )}
@@ -322,6 +408,10 @@ export default function App() {
                       <span className="lg-swatch" style={{ background: '#fab219' }} /> In progress
                     </span>
                   </div>
+                  <label className="ghost-toggle" style={{ marginTop: 6 }} title="When a task's finish moves, shift everything linked after it by the same amount">
+                    <input type="checkbox" checked={ripple} onChange={(e) => setRipple(e.target.checked)} />
+                    Move linked successors too
+                  </label>
                   {drawingModel && (
                     <button className="btn" onClick={() => setDrawingModelPersisted(null)}>
                       Back to auto-massing model
@@ -367,10 +457,79 @@ export default function App() {
               onScrub={setCurrentDate}
               selectedTaskUids={selectedTaskUids}
               onSelectTask={(uid) => setSelection(uid ? { type: 'task', uid } : null)}
+              editedUids={editedUids}
+              onEditTask={(uid, patch) => editTask(uid, patch)}
             />
           </div>
         </>
       )}
+      {exportOpen && project && (
+        <ExportModal project={project} onClose={() => setExportOpen(false)} />
+      )}
+    </div>
+  );
+}
+
+function ExportModal({ project, onClose }: { project: ProjectData; onClose: () => void }) {
+  const xml = useMemo(() => exportMspXml(project), [project]);
+  const [copied, setCopied] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+
+  const download = async () => {
+    const base = project.name.replace(/[^\w-]+/g, '_') + '_updated';
+    // Hosted-artifact runtime: downloads go through the viewer's save dialog,
+    // which allowlists extensions (.txt yes, .xml no) — save as .txt there.
+    const claudeRt = (window as { claude?: { use?: (n: string) => Promise<unknown> } }).claude;
+    if (claudeRt?.use) {
+      const dl = (await claudeRt.use('downloads')) as
+        | { save: (r: { filename: string; data: string }) => Promise<unknown> }
+        | null;
+      if (dl) {
+        try {
+          await dl.save({ filename: `${base}.xml.txt`, data: xml });
+          setNote('Saved as .xml.txt — rename it to .xml, then open it in Microsoft Project.');
+        } catch (e) {
+          const code = (e as { code?: string })?.code;
+          if (code !== 'declined') {
+            setNote('Save unavailable here — use Copy to clipboard and paste into a .xml file.');
+          }
+        }
+        return;
+      }
+    }
+    const blob = new Blob([xml], { type: 'text/xml' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${base}.xml`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(xml);
+      setCopied(true);
+    } catch {
+      // Clipboard API blocked (sandboxed hosting) — user can select-all in the textarea
+    }
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h3>Updated Microsoft Project XML</h3>
+        <p className="hint">
+          Your rescheduled dates written back into the original XML. Download it (or copy and save
+          as <code>.xml</code>) and open it in Microsoft Project: <em>File → Open</em>.
+        </p>
+        <textarea readOnly value={xml} onFocus={(e) => e.target.select()} />
+        {note && <p className="hint" style={{ color: '#e3b34a' }}>{note}</p>}
+        <div className="modal-actions">
+          <button className="btn primary" onClick={download}>Download</button>
+          <button className="btn" onClick={copy}>{copied ? 'Copied ✓' : 'Copy to clipboard'}</button>
+          <button className="btn" onClick={onClose}>Close</button>
+        </div>
+      </div>
     </div>
   );
 }

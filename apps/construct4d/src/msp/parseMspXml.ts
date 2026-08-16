@@ -82,5 +82,5 @@ export function parseMspXml(xmlText: string): ProjectData {
   const start = new Date(Math.min(...tasks.map((t) => t.start.getTime())));
   const finish = new Date(Math.max(...tasks.map((t) => t.finish.getTime())));
 
-  return { name: projectName, tasks, start, finish };
+  return { name: projectName, tasks, start, finish, rawXml: xmlText };
 }

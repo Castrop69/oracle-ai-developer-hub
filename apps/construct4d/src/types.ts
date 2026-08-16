@@ -17,7 +17,12 @@ export interface ProjectData {
   tasks: Task[];
   start: Date;
   finish: Date;
+  /** The original MSPDI XML text, kept so in-app edits can be exported back to MS Project. */
+  rawXml: string;
 }
+
+/** In-app schedule overrides, keyed by task UID. */
+export type ScheduleEdits = Record<number, { start?: Date; finish?: Date; percentComplete?: number }>;
 
 export type ElementCategory =
   | 'excavation'
