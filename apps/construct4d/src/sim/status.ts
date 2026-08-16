@@ -46,6 +46,34 @@ export function elementStatusAt(
   return { state: 'active', progress };
 }
 
+/**
+ * Schedule variance for an element at the simulation date: recorded
+ * %-complete (from MS Project) minus planned progress at date t, averaged
+ * over the linked tasks. Negative = behind plan. Returns null when the
+ * element has no linked tasks to measure.
+ */
+export function elementVarianceAt(
+  el: BuildingElement,
+  taskByUid: Map<number, Task>,
+  mapping: Mapping,
+  t: Date,
+): number | null {
+  const uids = mapping[el.id];
+  if (!uids || uids.length === 0) return null;
+  let planned = 0;
+  let actual = 0;
+  let n = 0;
+  for (const uid of uids) {
+    const task = taskByUid.get(uid);
+    if (!task) continue;
+    planned += taskProgressAt(task, t);
+    actual += clamp01(task.percentComplete / 100);
+    n++;
+  }
+  if (n === 0) return null;
+  return actual / n - planned / n;
+}
+
 function clamp01(v: number): number {
   return Math.max(0, Math.min(1, v));
 }

@@ -1,13 +1,13 @@
 import type { BuildingElement, ElementCategory, Mapping, Task } from '../types';
 
 const CATEGORY_KEYWORDS: Record<ElementCategory, RegExp> = {
-  site: /\b(site|sitework|grading|excavat|earthwork|utilit|paving|asphalt|landscap|mobiliz|demolition|demo)\b/i,
-  foundation: /\b(foundation|footing|pier|caisson|pile|grade beam|slab[- ]on[- ]grade|sog|underslab|waterproofing)\b/i,
-  structure: /\b(steel|structure|structural|frame|framing|erect|column|beam|deck|elevated slab|topping|shear|precast|tilt[- ]up|concrete)\b/i,
-  envelope: /\b(envelope|fa[cç]ade|curtain ?wall|exterior wall|glazing|window|storefront|masonry|brick|cmu|siding|cladding|panel)\b/i,
-  roof: /\b(roof|roofing|membrane|coping|parapet)\b/i,
-  interior: /\b(interior|drywall|gypsum|partition|stud|paint|floor|flooring|tile|carpet|ceiling|act\b|casework|millwork|finish|door|trim)\b/i,
-  mep: /\b(mep|mechanical|electrical|plumbing|hvac|fire protection|sprinkler|duct|ductwork|piping|conduit|rough[- ]?in|equipment|ahu|switchgear|elevator)\b/i,
+  site: /\b(site|sitework|grading|excavat\w*|earthwork|utilit\w*|paving|asphalt|landscap\w*|mobiliz\w*|demolition|demo)\b/i,
+  foundation: /\b(foundations?|footings?|piers?|caissons?|piles?|grade beams?|slab[- ]on[- ]grade|sog|underslab|waterproofing)\b/i,
+  structure: /\b(steel|structure|structural|frames?|framing|erect\w*|columns?|beams?|decks?|elevated slabs?|topping|shear|precast|tilt[- ]up|concrete)\b/i,
+  envelope: /\b(envelope|fa[cç]ade|curtain ?walls?|exterior walls?|glazing|windows?|storefronts?|masonry|brick|cmu|siding|cladding|panels?)\b/i,
+  roof: /\b(roofs?|roofing|membrane|coping|parapets?)\b/i,
+  interior: /\b(interiors?|drywall|gypsum|partitions?|studs?|paint\w*|floors?|flooring|tiles?|carpet\w*|ceilings?|act\b|casework|millwork|finish\w*|doors?|trim)\b/i,
+  mep: /\b(mep|mechanical|electrical|plumbing|hvac|fire protection|sprinklers?|ducts?|ductwork|piping|conduits?|rough[- ]?ins?|equipment|ahus?|switchgear|elevators?)\b/i,
 };
 
 // Order matters: more specific trades win over the broad "structure"/"interior" nets.

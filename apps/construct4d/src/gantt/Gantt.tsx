@@ -26,9 +26,11 @@ interface GanttProps {
   project: ProjectData;
   currentDate: Date;
   onScrub: (d: Date) => void;
+  selectedTaskUids: Set<number>;
+  onSelectTask: (uid: number | null) => void;
 }
 
-export function Gantt({ project, currentDate, onScrub }: GanttProps) {
+export function Gantt({ project, currentDate, onScrub, selectedTaskUids, onSelectTask }: GanttProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<{ task: Task; x: number; y: number } | null>(null);
 
@@ -84,9 +86,12 @@ export function Gantt({ project, currentDate, onScrub }: GanttProps) {
             {tasks.map((t) => (
               <div
                 key={t.uid}
-                className={`gantt-label ${t.summary ? 'summary' : ''}`}
+                className={`gantt-label ${t.summary ? 'summary' : ''} ${
+                  selectedTaskUids.has(t.uid) ? 'selected' : ''
+                }`}
                 style={{ height: ROW_H, paddingLeft: 8 + (t.outlineLevel - 1) * 14 }}
-                title={t.name}
+                title={`${t.name} — click to highlight in 3D`}
+                onClick={() => onSelectTask(selectedTaskUids.has(t.uid) ? null : t.uid)}
               >
                 {t.name}
               </div>
@@ -113,6 +118,20 @@ export function Gantt({ project, currentDate, onScrub }: GanttProps) {
               </g>
             ))}
             <line x1={0} y1={AXIS_H} x2={chartW} y2={AXIS_H} stroke={C.baseline} strokeWidth={1} />
+
+            {/* Selected-row washes */}
+            {tasks.map((t, i) =>
+              selectedTaskUids.has(t.uid) ? (
+                <rect
+                  key={`sel-${t.uid}`}
+                  x={0}
+                  y={AXIS_H + i * ROW_H}
+                  width={chartW}
+                  height={ROW_H}
+                  fill="rgba(57,135,229,0.12)"
+                />
+              ) : null,
+            )}
 
             {/* Task bars */}
             {tasks.map((t, i) => {

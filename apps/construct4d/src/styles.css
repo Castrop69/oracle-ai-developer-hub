@@ -308,6 +308,29 @@ body,
   margin: 8px 0;
 }
 
+.selection-panel {
+  border-color: var(--accent);
+}
+
+.link-list {
+  margin: 4px 0 10px;
+  padding-left: 18px;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.variance-legend {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.subtle-label {
+  color: var(--ink-muted);
+  font-size: 11.5px;
+}
+
 /* ---------- bottom: timeline + gantt ---------- */
 .bottom {
   flex-shrink: 0;
@@ -423,6 +446,19 @@ body,
 .gantt-label.summary {
   color: var(--ink);
   font-weight: 600;
+}
+
+.gantt-label {
+  cursor: pointer;
+}
+
+.gantt-label:hover {
+  color: var(--ink);
+}
+
+.gantt-label.selected {
+  background: rgba(57, 135, 229, 0.16);
+  color: var(--ink);
 }
 
 .gantt-tooltip {

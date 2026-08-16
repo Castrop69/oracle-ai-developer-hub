@@ -32,6 +32,16 @@ plan set PDF and Claude interprets the sheets — grids, dimensions, levels — 
   trip a safety classifier are retried on a fallback model in the same request.
 - **Interactive Gantt.** Hierarchical WBS, planned bars vs. built-to-date fill, milestones,
   tooltips, and a draggable simulation-date cursor synced with the 3D view.
+- **Two-way link tracing.** Click any element in 3D to see which schedule tasks drive it
+  (hover for a quick tooltip); click a task name in the Gantt to highlight everything it
+  builds in the model. `Esc` clears the selection.
+- **Schedule-variance mode.** Toggle "Color by schedule variance" to recolor started work by
+  recorded `% Complete` from MS Project vs. where the plan says it should be at the
+  simulation date — green on/ahead, yellow slightly behind, red behind. Scrub to your status
+  date to see slippage on the building itself.
+- **Coverage report.** A "Not animating" panel lists leaf tasks that didn't match any trade,
+  so you know exactly which activities have no geometry (and can fix them with a rename).
+- **Keyboard control.** `Space` play/pause, `←`/`→` step a day (`Shift` for a week).
 
 ## Run it
 
@@ -76,7 +86,8 @@ mapping + simulation date ──▶ element states ──▶ Three.js 4D view + 
 
 ## Limitations / next steps
 
-- Task↔element links are keyword-based; a manual mapping editor would help unusual naming.
+- Task↔element links are keyword-based (the "Not animating" panel shows any gaps); a manual
+  mapping editor would help unusual naming conventions.
 - Element geometry is box massing, not BIM — importing IFC/glTF models is a natural upgrade.
-- The simulation animates planned dates; recorded `PercentComplete` could drive an
-  as-built vs. planned comparison mode.
+- Variance mode compares recorded `% Complete` against planned progress at the simulation
+  date; earned-value curves (PV/EV over time) would be a natural extension.
