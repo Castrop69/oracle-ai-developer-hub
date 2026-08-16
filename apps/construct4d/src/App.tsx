@@ -8,6 +8,7 @@ import { generateModelFromSchedule } from './model/generateModelFromSchedule';
 import { autoMap, categorizeTask } from './mapping/autoMap';
 import type { BuildingModel, Mapping, ProjectData } from './types';
 import { CATEGORY_COLORS, CATEGORY_LABELS } from './types';
+import sampleScheduleXml from '../public/samples/sample-schedule.xml?raw';
 
 const DRAWING_MODEL_KEY = 'construct4d.drawingModel';
 
@@ -143,9 +144,8 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [project]);
 
-  const loadSample = async () => {
-    const res = await fetch(`${import.meta.env.BASE_URL}samples/sample-schedule.xml`);
-    projectFile.importText(await res.text());
+  const loadSample = () => {
+    projectFile.importText(sampleScheduleXml);
   };
 
   const linkedCount = Object.keys(mapping).length;
