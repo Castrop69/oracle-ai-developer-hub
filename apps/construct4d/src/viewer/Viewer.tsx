@@ -19,6 +19,7 @@ const CATEGORY_MATERIALS: Record<
   ElementCategory,
   { color: number; roughness: number; metalness: number; opacity?: number }
 > = {
+  excavation: { color: 0x4a3e2e, roughness: 1.0, metalness: 0.0, opacity: 0.45 },
   site: { color: 0x5c6653, roughness: 0.95, metalness: 0.0 },
   foundation: { color: 0x807d75, roughness: 0.9, metalness: 0.02 },
   structure: { color: 0xb9bec8, roughness: 0.38, metalness: 0.55 },
@@ -35,6 +36,7 @@ interface ViewerProps {
   currentDate: Date;
   showGhost: boolean;
   varianceMode: boolean;
+  xray: boolean;
   selectedElementIds: Set<string>;
   onPickElement: (id: string | null) => void;
 }
@@ -62,6 +64,7 @@ export function Viewer({
   currentDate,
   showGhost,
   varianceMode,
+  xray,
   selectedElementIds,
   onPickElement,
 }: ViewerProps) {
@@ -71,6 +74,9 @@ export function Viewer({
   const meshesRef = useRef<Map<string, ElementMesh>>(new Map());
   const activeMaterialsRef = useRef<Set<THREE.MeshStandardMaterial>>(new Set());
   const groupRef = useRef<THREE.Group | null>(null);
+  const groundRef = useRef<THREE.Mesh | null>(null);
+  const gridRef = useRef<THREE.GridHelper | null>(null);
+  const controlsRef = useRef<OrbitControls | null>(null);
   const raycasterRef = useRef(new THREE.Raycaster());
   const [hover, setHover] = useState<HoverInfo | null>(null);
 
@@ -125,6 +131,7 @@ export function Viewer({
     controls.maxPolarAngle = Math.PI / 2.05;
     controls.minDistance = 12;
     controls.maxDistance = 320;
+    controlsRef.current = controls;
 
     scene.add(new THREE.HemisphereLight(0x9db8d4, 0x24231f, 0.5));
 
@@ -147,18 +154,20 @@ export function Viewer({
 
     const ground = new THREE.Mesh(
       new THREE.CircleGeometry(300, 64),
-      new THREE.MeshStandardMaterial({ color: 0x131311, roughness: 1 }),
+      new THREE.MeshStandardMaterial({ color: 0x131311, roughness: 1, transparent: true }),
     );
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = -0.36;
     ground.receiveShadow = true;
     scene.add(ground);
+    groundRef.current = ground;
 
     const grid = new THREE.GridHelper(260, 52, 0x2a2a28, 0x1f1f1d);
     (grid.material as THREE.Material).transparent = true;
     (grid.material as THREE.Material).opacity = 0.5;
     grid.position.y = -0.35;
     scene.add(grid);
+    gridRef.current = grid;
 
     const resize = () => {
       const w = mount.clientWidth;
@@ -291,8 +300,10 @@ export function Viewer({
     const group = new THREE.Group();
     for (const el of model.elements) {
       const geo = new THREE.BoxGeometry(el.w, el.h, el.d);
-      // Anchor the box at its bottom so vertical growth looks like construction.
-      geo.translate(0, el.h / 2, 0);
+      // Anchor so growth reads as construction: bottom-anchored boxes rise,
+      // top-anchored boxes (excavation, drilled piers) dig downward.
+      const digsDown = el.growth === 'down';
+      geo.translate(0, digsDown ? -el.h / 2 : el.h / 2, 0);
 
       const spec = CATEGORY_MATERIALS[el.category];
       const doneMaterial = new THREE.MeshStandardMaterial({
@@ -318,11 +329,20 @@ export function Viewer({
         depthWrite: false,
       });
 
+      if (el.category === 'excavation') {
+        // The pit is a translucent cut volume: no shadow, and no depth write so
+        // the piers and footings inside it stay visible.
+        doneMaterial.depthWrite = false;
+        activeMaterial.depthWrite = false;
+        activeMaterial.opacity = 0.5;
+      }
+
       const mesh = new THREE.Mesh(geo, ghostMaterial);
-      mesh.position.set(el.x, el.y, el.z);
-      mesh.castShadow = true;
+      mesh.position.set(el.x, digsDown ? el.y + el.h : el.y, el.z);
+      mesh.castShadow = el.category !== 'excavation';
       mesh.receiveShadow = true;
       mesh.userData.elementId = el.id;
+      mesh.userData.noShadow = el.category === 'excavation';
 
       // Crisp box edges — doubles as the clean "ghost" outline for future work
       const edgeMaterial = new THREE.LineBasicMaterial({
@@ -373,7 +393,7 @@ export function Viewer({
       } else if (status.state === 'active') {
         mesh.visible = true;
         mesh.userData.ghost = false;
-        mesh.castShadow = true;
+        mesh.castShadow = !mesh.userData.noShadow;
         material = entry.activeMaterial;
         mesh.scale.y = Math.max(0.04, status.progress);
         edges.visible = false;
@@ -381,7 +401,7 @@ export function Viewer({
       } else {
         mesh.visible = true;
         mesh.userData.ghost = false;
-        mesh.castShadow = true;
+        mesh.castShadow = !mesh.userData.noShadow;
         material = entry.doneMaterial;
         mesh.scale.y = 1;
         edges.visible = true;
@@ -408,6 +428,32 @@ export function Viewer({
       mesh.material = material;
     }
   }, [model, project, mapping, currentDate, showGhost, varianceMode, selectedElementIds]);
+
+  // X-ray ground: fade the terrain and surface work so below-grade elements read
+  useEffect(() => {
+    const ground = groundRef.current;
+    const grid = gridRef.current;
+    const controls = controlsRef.current;
+    if (ground) {
+      (ground.material as THREE.MeshStandardMaterial).opacity = xray ? 0.12 : 1;
+      ground.receiveShadow = !xray;
+    }
+    if (grid) grid.visible = !xray;
+    if (controls) controls.maxPolarAngle = xray ? Math.PI * 0.62 : Math.PI / 2.05;
+    if (!model) return;
+    for (const el of model.elements) {
+      const entry = meshesRef.current.get(el.id);
+      if (!entry) continue;
+      if (el.category === 'site') {
+        entry.doneMaterial.transparent = true;
+        entry.doneMaterial.opacity = xray ? 0.18 : 1;
+        entry.doneMaterial.depthWrite = !xray;
+        entry.activeMaterial.opacity = xray ? 0.25 : 0.95;
+      } else if (el.category === 'excavation') {
+        entry.doneMaterial.opacity = xray ? 0.22 : 0.45;
+      }
+    }
+  }, [xray, model]);
 
   return (
     <div ref={mountRef} className="viewer-mount">

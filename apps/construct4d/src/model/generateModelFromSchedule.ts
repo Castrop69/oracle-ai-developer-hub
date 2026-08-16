@@ -34,6 +34,17 @@ export function generateModelFromSchedule(tasks: Task[]): BuildingModel {
   add({ name: 'Parking & paving (north)', category: 'site', level: null, x: 0, y: 0, z: -(D / 2 + 11), w: W + 20, d: 12, h: 0.15 });
   add({ name: 'Site utilities corridor', category: 'site', level: null, x: -(W / 2 + 10), y: 0, z: 0, w: 6, d: D, h: 0.15 });
 
+  // --- Below grade: excavation digs downward, then deep foundations fill the hole ---
+  add({ name: 'Mass excavation & shoring', category: 'excavation', level: null, x: 0, y: -2.64, z: 0, w: W + 6, d: D + 6, h: 2.6, growth: 'down' });
+  for (const gx of gridPositions(W, 6)) {
+    for (const gz of gridPositions(D, 3)) {
+      add({ name: 'Drilled pier', category: 'foundation', level: null, x: gx, y: -7.5, z: gz, w: 0.75, d: 0.75, h: 6.3, growth: 'down' });
+    }
+  }
+  add({ name: 'Elevator pit', category: 'foundation', level: null, x: W / 2 - 7, y: -2.2, z: -(D / 2 - 7), w: 3.6, d: 3.6, h: 2.2 });
+  add({ name: 'Underslab utility runs (E-W)', category: 'mep', level: null, x: 0, y: -0.95, z: 2, w: W - 6, d: 0.6, h: 0.4 });
+  add({ name: 'Underslab utility runs (N-S)', category: 'mep', level: null, x: -W / 6, y: -0.95, z: 0, w: 0.6, d: D - 6, h: 0.4 });
+
   // --- Foundations: perimeter grade beams + interior pad footings ---
   const gb = 0.9;
   add({ name: 'Grade beam (south)', category: 'foundation', level: null, x: 0, y: -1.2, z: D / 2, w: W, d: gb, h: 1.2 });

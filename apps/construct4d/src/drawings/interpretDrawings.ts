@@ -4,6 +4,7 @@ import type { BuildingElement, BuildingModel, ElementCategory } from '../types';
 const MODEL = 'claude-opus-5';
 
 const CATEGORIES: ElementCategory[] = [
+  'excavation',
   'site',
   'foundation',
   'structure',
@@ -73,6 +74,7 @@ Rules:
 - Read title blocks, grids, dimension strings, level datums, and schedules to establish real sizes. If the drawings are dimensioned in feet/inches, convert to meters.
 - If overall dimensions are not legible, estimate from door widths (~0.9 m), parking stalls (~2.7 m), or grid spacing, and say so in the summary.
 - Represent the building with 30–120 boxes: foundations (footings, grade beams, slab on grade), structure per level (columns as a representative grid, one slab/deck box per level), envelope as one wall box per face per level, roof, interior partitions as a few representative boxes per level, MEP as riser/shaft boxes, and site elements (pads, paving) when shown.
+- Below-grade scope matters: when the drawings show basements, mass excavation limits, drilled piers/caissons/piles, elevator or sump pits, or underslab utilities, include them. Use category "excavation" for the excavation/shoring volume (one box covering the dig limits, bottom_m at subgrade elevation) and "foundation" for deep foundation elements; underslab utility runs are "mep". All of these have negative bottom_m.
 - Coordinates: X is plan width, Z is plan depth, origin at the building footprint center. bottom_m is meters above the ground-floor slab (foundations are negative).
 - Assign every element the category that matches the trade that builds it.
 - Name elements the way a scheduler would recognize them (e.g. "Elevated slab L2", "Curtain wall north L3").`;
@@ -167,6 +169,7 @@ export async function interpretDrawings(
     w: Math.max(0.05, e.width_m),
     d: Math.max(0.05, e.depth_m),
     h: Math.max(0.05, e.height_m),
+    growth: (e.category === 'excavation' || e.bottom_m < -0.5 ? 'down' : 'up') as 'up' | 'down',
   }));
 
   onProgress?.(`Interpreted "${building.building_name}" — ${elements.length} elements.`);

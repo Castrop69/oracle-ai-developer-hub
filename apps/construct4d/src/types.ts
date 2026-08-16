@@ -20,6 +20,7 @@ export interface ProjectData {
 }
 
 export type ElementCategory =
+  | 'excavation'
   | 'site'
   | 'foundation'
   | 'structure'
@@ -40,6 +41,8 @@ export interface BuildingElement {
   w: number;
   d: number;
   h: number;
+  /** 'up' (default) builds from the bottom; 'down' digs from the top (excavation, piers). */
+  growth?: 'up' | 'down';
 }
 
 /** elementId -> task UIDs driving that element */
@@ -59,6 +62,7 @@ export interface ElementStatus {
 }
 
 export const CATEGORY_LABELS: Record<ElementCategory, string> = {
+  excavation: 'Excavation',
   site: 'Sitework',
   foundation: 'Foundations',
   structure: 'Structure',
@@ -70,6 +74,7 @@ export const CATEGORY_LABELS: Record<ElementCategory, string> = {
 
 /** Completed-element material colors for the 3D view (dark scene). */
 export const CATEGORY_COLORS: Record<ElementCategory, string> = {
+  excavation: '#4a3e2e',
   site: '#5f6553',
   foundation: '#84827b',
   structure: '#a7adb8',

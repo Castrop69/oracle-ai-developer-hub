@@ -19,6 +19,7 @@ export default function App() {
   const [speed, setSpeed] = useState(7);
   const [showGhost, setShowGhost] = useState(true);
   const [varianceMode, setVarianceMode] = useState(false);
+  const [xray, setXray] = useState(false);
   const [selection, setSelection] = useState<Selection>(null);
   const [drawingModel, setDrawingModel] = useState<BuildingModel | null>(() => {
     try {
@@ -243,6 +244,7 @@ export default function App() {
                 currentDate={currentDate}
                 showGhost={showGhost}
                 varianceMode={varianceMode}
+                xray={xray}
                 selectedElementIds={selectedElementIds}
                 onPickElement={(id) => setSelection(id ? { type: 'element', id } : null)}
               />
@@ -254,6 +256,14 @@ export default function App() {
                     onChange={(e) => setShowGhost(e.target.checked)}
                   />
                   Ghost future work
+                </label>
+                <label className="ghost-toggle" title="Fades the ground and surface work so excavation, piers, and underslab utilities are visible">
+                  <input
+                    type="checkbox"
+                    checked={xray}
+                    onChange={(e) => setXray(e.target.checked)}
+                  />
+                  See below grade
                 </label>
                 <label className="ghost-toggle" title="Colors started work by recorded % complete vs where the plan says it should be at the simulation date">
                   <input

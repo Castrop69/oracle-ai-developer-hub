@@ -1,8 +1,9 @@
 import type { BuildingElement, ElementCategory, Mapping, Task } from '../types';
 
 const CATEGORY_KEYWORDS: Record<ElementCategory, RegExp> = {
-  site: /\b(site|sitework|grading|excavat\w*|earthwork|utilit\w*|paving|asphalt|landscap\w*|mobiliz\w*|demolition|demo)\b/i,
-  foundation: /\b(foundations?|footings?|piers?|caissons?|piles?|grade beams?|slab[- ]on[- ]grade|sog|underslab|waterproofing)\b/i,
+  excavation: /\b(excavat\w*|earthwork|mass ex\w*|shoring|sheeting|sheet pil\w*|soldier piles?|dewatering|cut and fill|overex\w*)\b/i,
+  site: /\b(site|sitework|grading|utilit\w*|paving|asphalt|landscap\w*|mobiliz\w*|demolition|demo)\b/i,
+  foundation: /\b(foundations?|footings?|piers?|caissons?|piles?|auger ?cast|grade beams?|slab[- ]on[- ]grade|sog|underslab concrete|waterproofing|backfill)\b/i,
   structure: /\b(steel|structure|structural|frames?|framing|erect\w*|columns?|beams?|decks?|elevated slabs?|topping|shear|precast|tilt[- ]up|concrete)\b/i,
   envelope: /\b(envelope|fa[cç]ade|curtain ?walls?|exterior walls?|glazing|windows?|storefronts?|masonry|brick|cmu|siding|cladding|panels?)\b/i,
   roof: /\b(roofs?|roofing|membrane|coping|parapets?)\b/i,
@@ -12,6 +13,7 @@ const CATEGORY_KEYWORDS: Record<ElementCategory, RegExp> = {
 
 // Order matters: more specific trades win over the broad "structure"/"interior" nets.
 const CATEGORY_ORDER: ElementCategory[] = [
+  'excavation',
   'foundation',
   'roof',
   'envelope',
