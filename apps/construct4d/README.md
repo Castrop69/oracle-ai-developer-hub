@@ -32,6 +32,12 @@ plan set PDF and Claude interprets the sheets — grids, dimensions, levels — 
   trip a safety classifier are retried on a fallback model in the same request.
 - **Interactive Gantt.** Hierarchical WBS, planned bars vs. built-to-date fill, milestones,
   tooltips, and a draggable simulation-date cursor synced with the 3D view.
+- **A scene, not just boxes.** Procedural materials give the massing real surfaces — curtain
+  wall with mullions and spandrel bands, board-formed concrete, asphalt, mottled ground —
+  under soft shadows, SSAO, and a subtle bloom pass. Jobsite props follow the schedule: a
+  tower crane stands (and slowly slews) while structure/envelope/roof work is running, then
+  comes down; landscaping trees grow in with the site tasks; low-rise context buildings
+  fade into the fog for depth and scale.
 - **Two-way link tracing.** Click any element in 3D to see which schedule tasks drive it
   (hover for a quick tooltip); click a task name in the Gantt to highlight everything it
   builds in the model. `Esc` clears the selection.

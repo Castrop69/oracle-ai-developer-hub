@@ -2,9 +2,23 @@ import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { SSAOPass } from 'three/examples/jsm/postprocessing/SSAOPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import {
+  makeCurtainWallTexture,
+  makeConcreteTexture,
+  makeAsphaltTexture,
+  makeGroundTexture,
+  makeRoofTexture,
+} from './textures';
+import { buildCrane, buildTreeRing, buildContext } from './props';
+import { categorizeTask } from '../mapping/autoMap';
 import type { BuildingModel, ElementCategory, Mapping, ProjectData } from '../types';
 import { CATEGORY_LABELS } from '../types';
-import { elementStatusAt, elementVarianceAt, excavationClosureAt } from '../sim/status';
+import { elementStatusAt, elementVarianceAt, excavationClosureAt, taskProgressAt } from '../sim/status';
 
 const ACTIVE_COLOR = 0xfab219; // in-progress "under construction" yellow
 const SELECT_EMISSIVE = 0x1c5cab;
@@ -77,6 +91,14 @@ export function Viewer({
   const groundRef = useRef<THREE.Mesh | null>(null);
   const gridRef = useRef<THREE.GridHelper | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
+  const texRef = useRef<{
+    curtain: THREE.CanvasTexture;
+    concrete: THREE.CanvasTexture;
+    asphalt: THREE.CanvasTexture;
+    roof: THREE.CanvasTexture;
+  } | null>(null);
+  const craneRef = useRef<THREE.Group | null>(null);
+  const treesRef = useRef<THREE.Group | null>(null);
   const raycasterRef = useRef(new THREE.Raycaster());
   const [hover, setHover] = useState<HoverInfo | null>(null);
 
@@ -152,9 +174,21 @@ export function Viewer({
     rim.position.set(-60, 40, -50);
     scene.add(rim);
 
+    texRef.current = {
+      curtain: makeCurtainWallTexture(),
+      concrete: makeConcreteTexture(),
+      asphalt: makeAsphaltTexture(),
+      roof: makeRoofTexture(),
+    };
+
     const ground = new THREE.Mesh(
       new THREE.CircleGeometry(300, 64),
-      new THREE.MeshStandardMaterial({ color: 0x131311, roughness: 1, transparent: true }),
+      new THREE.MeshStandardMaterial({
+        color: 0x8f8f88,
+        map: makeGroundTexture(),
+        roughness: 1,
+        transparent: true,
+      }),
     );
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = -0.36;
@@ -169,11 +203,41 @@ export function Viewer({
     scene.add(grid);
     gridRef.current = grid;
 
+    // Distant context buildings fade into the fog for depth and scale
+    scene.add(buildContext());
+
+    // Landscaping trees, grown in by the site tasks
+    const trees = buildTreeRing(52, 40);
+    trees.visible = false;
+    scene.add(trees);
+    treesRef.current = trees;
+
+    // Post-processing: AO grounds the massing, bloom lifts the active-work glow
+    const composer = new EffectComposer(renderer);
+    composer.renderTarget1.samples = 8;
+    composer.renderTarget2.samples = 8;
+    composer.addPass(new RenderPass(scene, camera));
+    const ssao = new SSAOPass(scene, camera, mount.clientWidth || 800, mount.clientHeight || 600);
+    ssao.kernelRadius = 10;
+    ssao.minDistance = 0.0008;
+    ssao.maxDistance = 0.12;
+    ssao.output = SSAOPass.OUTPUT.Default;
+    composer.addPass(ssao);
+    const bloom = new UnrealBloomPass(
+      new THREE.Vector2(mount.clientWidth || 800, mount.clientHeight || 600),
+      0.28,
+      0.5,
+      0.82,
+    );
+    composer.addPass(bloom);
+    composer.addPass(new OutputPass());
+
     const resize = () => {
       const w = mount.clientWidth;
       const h = mount.clientHeight;
       if (w === 0 || h === 0) return;
       renderer.setSize(w, h);
+      composer.setSize(w, h);
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
     };
@@ -258,9 +322,13 @@ export function Viewer({
       raf = requestAnimationFrame(animate);
       controls.update();
       // Breathing glow on in-progress work
-      const pulse = 0.45 + 0.3 * Math.sin(clock.getElapsedTime() * 2.4);
+      const t = clock.getElapsedTime();
+      const pulse = 0.45 + 0.3 * Math.sin(t * 2.4);
       for (const m of activeMaterialsRef.current) m.emissiveIntensity = pulse;
-      renderer.render(scene, camera);
+      // Slow crane slew while erection is underway
+      const crane = craneRef.current;
+      if (crane && crane.visible) (crane.userData.slew as THREE.Group).rotation.y = t * 0.07;
+      composer.render();
     };
     animate();
 
@@ -313,15 +381,50 @@ export function Viewer({
         transparent: spec.opacity !== undefined,
         opacity: spec.opacity ?? 1,
       });
+      // Texture the big faces so the massing reads as real materials
+      const tex = texRef.current;
+      if (tex) {
+        const span = Math.max(el.w, el.d);
+        let map: THREE.CanvasTexture | null = null;
+        let repeat: [number, number] | null = null;
+        if (el.category === 'envelope') {
+          map = tex.curtain;
+          repeat = [Math.max(1, Math.round(span / 3.2)), Math.max(1, Math.round(el.h / 3.6))];
+          doneMaterial.color.set(0xcfe2f2);
+        } else if (el.category === 'foundation' && span > 4) {
+          map = tex.concrete;
+          repeat = [Math.max(1, span / 9), Math.max(1, Math.max(el.d, el.h) / 9)];
+        } else if (el.category === 'structure' && span > 8) {
+          map = tex.concrete; // decks/slabs read as concrete; columns stay steel
+          repeat = [Math.max(1, span / 9), Math.max(1, el.d / 9)];
+          doneMaterial.metalness = 0.08;
+          doneMaterial.roughness = 0.85;
+        } else if (el.category === 'site' && span > 6) {
+          map = tex.asphalt;
+          repeat = [Math.max(1, span / 10), Math.max(1, el.d / 10)];
+          doneMaterial.color.set(0x9c9d9e);
+        } else if (el.category === 'roof' && span > 4) {
+          map = tex.roof;
+          repeat = [Math.max(1, span / 8), Math.max(1, el.d / 8)];
+        }
+        if (map && repeat) {
+          const m = map.clone();
+          m.needsUpdate = true;
+          m.repeat.set(repeat[0], repeat[1]);
+          doneMaterial.map = m;
+        }
+      }
+      const flatWork = el.category === 'site' || el.category === 'excavation';
       const activeMaterial = new THREE.MeshStandardMaterial({
-        color: ACTIVE_COLOR,
-        emissive: 0x8a5a00,
-        emissiveIntensity: 0.5,
-        roughness: 0.55,
-        metalness: 0.1,
+        color: flatWork ? 0x565043 : ACTIVE_COLOR,
+        emissive: flatWork ? 0x000000 : 0x8a5a00,
+        emissiveIntensity: flatWork ? 0 : 0.5,
+        roughness: flatWork ? 1 : 0.55,
+        metalness: flatWork ? 0 : 0.1,
         transparent: true,
-        opacity: 0.95,
+        opacity: flatWork ? 0.55 : 0.95,
       });
+      activeMaterial.userData.noPulse = flatWork;
       const ghostMaterial = new THREE.MeshStandardMaterial({
         color: 0x30302d,
         transparent: true,
@@ -365,6 +468,25 @@ export function Viewer({
     }
     scene.add(group);
     groupRef.current = group;
+
+    // Tower crane beside the building, sized to hook above the roof
+    if (craneRef.current) {
+      scene.remove(craneRef.current);
+      craneRef.current = null;
+    }
+    const built = model.elements.filter(
+      (e) => e.category !== 'site' && e.category !== 'excavation',
+    );
+    if (built.length > 0) {
+      const minX = Math.min(...built.map((e) => e.x - e.w / 2));
+      const maxZ = Math.max(...built.map((e) => e.z + e.d / 2));
+      const top = Math.max(...built.map((e) => e.y + e.h));
+      const crane = buildCrane(Math.max(18, top + 9));
+      crane.position.set(minX - 7, 0, maxZ + 7);
+      crane.visible = false;
+      scene.add(crane);
+      craneRef.current = crane;
+    }
   }, [model]);
 
   // Drive element visibility/growth/coloring from the simulation date
@@ -373,6 +495,31 @@ export function Viewer({
     const taskByUid = new Map(project.tasks.map((t) => [t.uid, t]));
     const closure = excavationClosureAt(project.tasks, currentDate);
     activeMaterialsRef.current.clear();
+
+    // Jobsite props follow the schedule: crane up while erection runs,
+    // trees grow in with landscaping
+    const leaf = project.tasks.filter((t) => !t.summary && !t.milestone);
+    const erection = leaf.filter((t) => {
+      const c = categorizeTask(t.name);
+      return c === 'structure' || c === 'envelope' || c === 'roof';
+    });
+    const craneUp = erection.some((t) => {
+      const p = taskProgressAt(t, currentDate);
+      return p > 0 && p < 1;
+    });
+    if (craneRef.current) craneRef.current.visible = craneUp;
+    const landscaping = leaf.filter((t) => /landscap|paving/i.test(t.name));
+    const treeProgress =
+      landscaping.length > 0
+        ? landscaping.reduce((sum, t) => sum + taskProgressAt(t, currentDate), 0) / landscaping.length
+        : 0;
+    if (treesRef.current) {
+      treesRef.current.visible = treeProgress > 0.25;
+      const sc = Math.max(0.001, (treeProgress - 0.25) / 0.75);
+      treesRef.current.children.forEach((t) =>
+        t.scale.setScalar(sc * ((t.userData.baseScale as number) ?? 1)),
+      );
+    }
 
     for (const el of model.elements) {
       const entry = meshesRef.current.get(el.id);
@@ -398,7 +545,9 @@ export function Viewer({
         material = entry.activeMaterial;
         mesh.scale.y = Math.max(0.04, status.progress);
         edges.visible = false;
-        activeMaterialsRef.current.add(entry.activeMaterial);
+        if (!entry.activeMaterial.userData.noPulse) {
+          activeMaterialsRef.current.add(entry.activeMaterial);
+        }
       } else {
         mesh.visible = true;
         mesh.userData.ghost = false;
@@ -419,7 +568,9 @@ export function Viewer({
       } else if (status.state === 'done') {
         material.color.setHex(CATEGORY_MATERIALS[el.category].color);
       } else if (status.state === 'active') {
-        material.color.setHex(ACTIVE_COLOR);
+        material.color.setHex(
+          entry.activeMaterial.userData.noPulse ? 0x565043 : ACTIVE_COLOR,
+        );
       }
 
       // Backfill: a finished pit closes up in normal view, stays a faint trace in x-ray
